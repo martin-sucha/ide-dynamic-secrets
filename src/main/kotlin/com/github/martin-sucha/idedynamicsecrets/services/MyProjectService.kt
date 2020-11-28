@@ -1,7 +1,7 @@
-package org.jetbrains.plugins.template.services
+package com.github.martin-sucha.idedynamicsecrets.services
 
 import com.intellij.openapi.project.Project
-import org.jetbrains.plugins.template.MyBundle
+import com.github.martin-sucha.idedynamicsecrets.MyBundle
 
 class MyProjectService(project: Project) {
 
