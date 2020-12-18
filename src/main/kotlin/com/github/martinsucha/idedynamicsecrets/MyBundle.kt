@@ -1,4 +1,4 @@
-package com.github.martin-sucha.idedynamicsecrets
+package com.github.martinsucha.idedynamicsecrets
 
 import com.intellij.AbstractBundle
 import org.jetbrains.annotations.NonNls

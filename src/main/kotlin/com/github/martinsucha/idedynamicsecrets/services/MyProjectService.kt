@@ -1,7 +1,7 @@
-package com.github.martin-sucha.idedynamicsecrets.services
+package com.github.martinsucha.idedynamicsecrets.services
 
 import com.intellij.openapi.project.Project
-import com.github.martin-sucha.idedynamicsecrets.MyBundle
+import com.github.martinsucha.idedynamicsecrets.MyBundle
 
 class MyProjectService(project: Project) {
 

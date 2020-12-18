@@ -1,19 +1,19 @@
 <idea-plugin>
-    <id>com.github.martin-sucha.idedynamicsecrets</id>
-    <name>ide-dynamic-secrets</name>
-    <vendor>martin-sucha</vendor>
+    <id>com.github.martinsucha.idedynamicsecrets</id>
+    <name>IDE Dynamic Secrets</name>
+    <vendor>Martin Sucha</vendor>
 
     <!-- Product and plugin compatibility requirements -->
     <!-- https://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <applicationService serviceImplementation="com.github.martin-sucha.idedynamicsecrets.services.MyApplicationService"/>
-        <projectService serviceImplementation="com.github.martin-sucha.idedynamicsecrets.services.MyProjectService"/>
+        <applicationService serviceImplementation="com.github.martinsucha.idedynamicsecrets.services.MyApplicationService"/>
+        <projectService serviceImplementation="com.github.martinsucha.idedynamicsecrets.services.MyProjectService"/>
     </extensions>
 
     <applicationListeners>
-        <listener class="com.github.martin-sucha.idedynamicsecrets.listeners.MyProjectManagerListener"
+        <listener class="com.github.martinsucha.idedynamicsecrets.listeners.MyProjectManagerListener"
                   topic="com.intellij.openapi.project.ProjectManagerListener"/>
     </applicationListeners>
 </idea-plugin>
