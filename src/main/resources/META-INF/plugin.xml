@@ -10,6 +10,10 @@
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="com.github.martinsucha.idedynamicsecrets.services.MyApplicationService"/>
         <projectService serviceImplementation="com.github.martinsucha.idedynamicsecrets.services.MyProjectService"/>
+        <projectService serviceImplementation="com.github.martinsucha.idedynamicsecrets.Vault"/>
+        <projectConfigurable parentId="tools" instance="com.github.martinsucha.idedynamicsecrets.VaultConfigurable"
+                             id="com.github.martinsucha.idedynamicsecrets.VaultConfigurable"
+                             displayName="Dynamic Secrets"/>
     </extensions>
 
     <applicationListeners>
