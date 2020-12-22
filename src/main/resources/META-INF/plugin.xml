@@ -6,6 +6,7 @@
     <!-- Product and plugin compatibility requirements -->
     <!-- https://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
+    <depends>org.jetbrains.plugins.go</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="com.github.martinsucha.idedynamicsecrets.services.MyApplicationService"/>
@@ -14,6 +15,12 @@
         <projectConfigurable parentId="tools" instance="com.github.martinsucha.idedynamicsecrets.VaultConfigurable"
                              id="com.github.martinsucha.idedynamicsecrets.VaultConfigurable"
                              displayName="Dynamic Secrets"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.goide">
+        <runConfigurationExtension
+                implementation="com.github.martinsucha.idedynamicsecrets.DynamicSecretsGoRunConfigurationExtension"
+                id="dynamicsecretsGoland"/>
     </extensions>
 
     <applicationListeners>

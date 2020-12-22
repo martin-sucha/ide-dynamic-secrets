@@ -18,6 +18,8 @@ plugins {
     id("org.jlleitschuh.gradle.ktlint") version "9.4.1"
     // dependency checker
     id("com.github.ben-manes.versions") version "0.36.0"
+    // Kotlin serialization
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.4.20"
 }
 
 // Import variables from gradle.properties file
@@ -45,6 +47,8 @@ repositories {
 }
 dependencies {
     detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.14.2")
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.1")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:1.4.20")
 }
 
 // Configure gradle-intellij-plugin plugin.

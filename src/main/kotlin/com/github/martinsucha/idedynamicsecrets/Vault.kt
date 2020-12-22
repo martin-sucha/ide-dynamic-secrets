@@ -14,6 +14,11 @@ import com.intellij.util.xmlb.XmlSerializerUtil
 import java.io.IOException
 import java.nio.file.Paths
 import com.intellij.execution.ExecutionException
+import com.intellij.util.io.HttpRequests
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import java.net.URI
 
 data class VaultState(
         var vaultAddress: String = "",
@@ -23,7 +28,7 @@ data class VaultState(
 @State(
         name = "com.github.martinsucha.idedynamicsecrets.Vault",
 )
-class Vault(project: Project) : PersistentStateComponent<VaultState> {
+class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateComponent<VaultState> {
     val configuration = VaultState()
 
     override fun getState() = configuration
@@ -48,6 +53,67 @@ class Vault(project: Project) : PersistentStateComponent<VaultState> {
         } catch (e: ExecutionException) {
             ""
         }
+    }
+
+    /**
+     * Fetches a vault secret by path.
+     * path does not start with slash.
+     */
+    fun fetchSecret(token : String, path : String) : Map<String,String> {
+        val jsonData = HttpRequests.request(secretURL(configuration.vaultAddress, path))
+            .tuner {
+                it.setRequestProperty("X-Vault-Token", token)
+            }.readString()
+        return parseSecret(jsonData)
+    }
+}
+
+fun secretURL(vaultURL : String, secretPath : String) : String {
+    val baseURI = URI(vaultURL)
+    val basePathWithoutSlash = if (baseURI.path.endsWith("/")) {
+        baseURI.path.dropLast(1)
+    } else {
+        baseURI.path
+    }
+    val path = "$basePathWithoutSlash/v1/$secretPath"
+    return URI(
+        baseURI.scheme,
+        baseURI.authority,
+        path,
+        null,
+        null,
+    ).toASCIIString()
+}
+
+class VaultException(message:String): Exception(message)
+
+fun parseSecret(jsonData : String) : Map<String, String> {
+    val el = Json.parseToJsonElement(jsonData)
+    if (el !is JsonObject) {
+        throw VaultException("Parsing vault secret: root not a JSON object")
+    }
+    val data = el.getOrElse("data", {
+        throw VaultException("Parsing vault secret: data object not found")
+    })
+    if (data !is JsonObject) {
+        throw VaultException("Parsing vault secret: data is not an object")
+    }
+    val secretValues = if (data.keys == setOf("data", "metadata")) {
+        // This is a secret from kv engine v2, use data.data instead
+        val dataData = data["data"]
+        if (dataData !is JsonObject) {
+            throw VaultException("Parsing vault secret: data.data is not an object")
+        }
+        dataData
+    } else {
+        data
+    }
+    return secretValues.mapValues {
+        val value = it.value
+        if (value !is JsonPrimitive || !value.isString) {
+            throw VaultException("Parsing vault secret: value ${it.key} is not a string")
+        }
+        value.toString()
     }
 }
 
