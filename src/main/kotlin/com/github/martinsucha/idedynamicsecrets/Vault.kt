@@ -113,7 +113,7 @@ fun parseSecret(jsonData : String) : Map<String, String> {
         if (value !is JsonPrimitive || !value.isString) {
             throw VaultException("Parsing vault secret: value ${it.key} is not a string")
         }
-        value.toString()
+        value.content
     }
 }
 
