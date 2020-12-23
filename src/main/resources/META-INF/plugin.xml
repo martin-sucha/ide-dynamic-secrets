@@ -7,6 +7,7 @@
     <!-- https://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
     <depends>org.jetbrains.plugins.go</depends>
+    <depends>com.intellij.database</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <applicationService serviceImplementation="com.github.martinsucha.idedynamicsecrets.services.MyApplicationService"/>
@@ -21,6 +22,10 @@
         <runConfigurationExtension
                 implementation="com.github.martinsucha.idedynamicsecrets.DynamicSecretsGoRunConfigurationExtension"
                 id="dynamicsecretsGoland"/>
+    </extensions>
+
+    <extensions defaultExtensionNs="com.intellij.database">
+        <connectionInterceptor implementation="com.github.martinsucha.idedynamicsecrets.DynamicSecretsAuthCredentialsProvider" order="first"/>
     </extensions>
 
     <applicationListeners>
