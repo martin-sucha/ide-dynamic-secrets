@@ -36,20 +36,15 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
         XmlSerializerUtil.copyBean(p, configuration)
     }
 
-    fun getToken() : String {
-        if (configuration.tokenHelperPath == "") {
-            try {
-                val homeDir = SystemProperties.getUserHome()
-                Paths.get(homeDir, ".vault-token").toFile().inputStream().use {
-                    return it.readBytes().toString(charset("UTF-8")).trim()
-                }
-            } catch (e: IOException) {
-                return ""
-            }
-        }
-        val cmdLine = GeneralCommandLine(configuration.tokenHelperPath, "get")
+    fun getToken(): String {
         return try {
-            ScriptRunnerUtil.getProcessOutput(cmdLine, ScriptRunnerUtil.STDOUT_OUTPUT_KEY_FILTER, 1000).trim()
+            if (configuration.tokenHelperPath != "") {
+                getTokenFromHelper(configuration.tokenHelperPath)
+            } else {
+                getTokenFromFile()
+            }
+        } catch (e: IOException) {
+            ""
         } catch (e: ExecutionException) {
             ""
         }
@@ -59,7 +54,7 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
      * Fetches a vault secret by path.
      * path does not start with slash.
      */
-    fun fetchSecret(token : String, path : String) : Map<String,String> {
+    fun fetchSecret(token: String, path: String): Map<String, String> {
         val jsonData = HttpRequests.request(secretURL(configuration.vaultAddress, path))
             .tuner {
                 it.setRequestProperty("X-Vault-Token", token)
@@ -68,7 +63,22 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
     }
 }
 
-fun secretURL(vaultURL : String, secretPath : String) : String {
+fun getTokenFromFile(): String {
+    val homeDir = SystemProperties.getUserHome()
+    return Paths.get(homeDir, ".vault-token").toFile().inputStream().use {
+        it.readBytes().toString(charset("UTF-8")).trim()
+    }
+}
+
+private const val TOKEN_HELPER_TIMEOUT_MILLIS = 1000L
+
+fun getTokenFromHelper(helperPath: String): String {
+    val cmdLine = GeneralCommandLine(helperPath, "get")
+    return ScriptRunnerUtil.getProcessOutput(cmdLine, ScriptRunnerUtil.STDOUT_OUTPUT_KEY_FILTER,
+        TOKEN_HELPER_TIMEOUT_MILLIS).trim()
+}
+
+fun secretURL(vaultURL: String, secretPath: String): String {
     val baseURI = URI(vaultURL)
     val basePathWithoutSlash = if (baseURI.path.endsWith("/")) {
         baseURI.path.dropLast(1)
@@ -85,9 +95,10 @@ fun secretURL(vaultURL : String, secretPath : String) : String {
     ).toASCIIString()
 }
 
-class VaultException(message:String): Exception(message)
+class VaultException(message: String) : Exception(message)
 
-fun parseSecret(jsonData : String) : Map<String, String> {
+@Suppress("ThrowsCount")
+fun parseSecret(jsonData: String): Map<String, String> {
     val el = Json.parseToJsonElement(jsonData)
     if (el !is JsonObject) {
         throw VaultException("Parsing vault secret: root not a JSON object")

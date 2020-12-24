@@ -21,21 +21,21 @@ const val DATABASE_PASSWORD_KEY_PROPERTY = "com.github.martinsucha.idedynamicsec
 
 class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
     override fun intercept(
-        proto: DatabaseConnectionInterceptor.ProtoConnection,
-        silent: Boolean
+            proto: DatabaseConnectionInterceptor.ProtoConnection,
+            silent: Boolean
     ): CompletionStage<DatabaseConnectionInterceptor.ProtoConnection>? {
         return CompletableFuture.supplyAsync {
             val path = proto.connectionPoint.additionalJdbcProperties[DATABASE_PATH_PROPERTY]
             if (path == null || path == "") {
-                throw RuntimeException("vault path is not specified")
+                throw ConfigurationException("vault path is not specified")
             }
             val usernameKey = proto.connectionPoint.additionalJdbcProperties[DATABASE_USERNAME_KEY_PROPERTY]
             if (usernameKey == null || usernameKey == "") {
-                throw RuntimeException("vault username key is not specified")
+                throw ConfigurationException("vault username key is not specified")
             }
             val passwordKey = proto.connectionPoint.additionalJdbcProperties[DATABASE_PASSWORD_KEY_PROPERTY]
             if (passwordKey == null || passwordKey == "") {
-                throw RuntimeException("vault password key is not specified")
+                throw ConfigurationException("vault password key is not specified")
             }
 
             val vault = proto.runConfiguration.project.getService(Vault::class.java)
@@ -44,11 +44,11 @@ class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
             val secret = vault.fetchSecret(token, path)
 
             if (!secret.containsKey(usernameKey)) {
-                throw RuntimeException("key $usernameKey is not present in secret")
+                throw VaultException("key $usernameKey is not present in secret")
             }
 
             if (!secret.containsKey(passwordKey)) {
-                throw RuntimeException("key $passwordKey is not present in secret")
+                throw VaultException("key $passwordKey is not present in secret")
             }
 
             proto.connectionProperties["user"] = secret[usernameKey]
@@ -67,20 +67,21 @@ class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
     override fun isApplicableAsDefault(dataSource: LocalDataSource): Boolean = true
 
     override fun createWidget(
-        project: Project?,
-        credentials: DatabaseCredentials,
-        dataSource: LocalDataSource
+            project: Project?,
+            credentials: DatabaseCredentials,
+            dataSource: LocalDataSource
     ): DatabaseAuthProvider.AuthWidget {
         return DynamicSecretsAuthWidget()
     }
 }
 
 data class DatabaseSecretConfiguration(
-    var path : String = "",
-    var usernameKey : String = "username",
-    var passwordKey : String = "password",
+        var path: String = "",
+        var usernameKey: String = "username",
+        var passwordKey: String = "password",
 )
 
+@Suppress("TooManyFunctions")
 class DynamicSecretsAuthWidget : DatabaseAuthProvider.AuthWidget {
     private val configuration = DatabaseSecretConfiguration()
     private val panel = createPanel()
@@ -97,7 +98,9 @@ class DynamicSecretsAuthWidget : DatabaseAuthProvider.AuthWidget {
         }
     }
 
-    override fun onChanged(p0: DocumentListener) {}
+    override fun onChanged(p0: DocumentListener) {
+        // no-op. Do we need to implement this?
+    }
 
     override fun save(dataSource: LocalDataSource, copyCredentials: Boolean) {
         panel.apply()
@@ -115,18 +118,27 @@ class DynamicSecretsAuthWidget : DatabaseAuthProvider.AuthWidget {
 
     override fun isPasswordChanged(): Boolean = false
 
-    override fun hidePassword() {}
+    override fun hidePassword() {
+        // no-op
+    }
 
-    override fun reloadCredentials() {}
+    override fun reloadCredentials() {
+        // no-op
+    }
 
     override fun getComponent(): JComponent = panel
 
     override fun getPreferredFocusedComponent(): JComponent = panel.preferredFocusedComponent!!
 
-    override fun forceSave() {}
+    override fun forceSave() {
+        // no-op
+    }
 
-    override fun updateFromUrl(holder: ParametersHolder) {}
+    override fun updateFromUrl(holder: ParametersHolder) {
+        // no-op
+    }
 
-    override fun updateUrl(holder: MutableParametersHolder) {}
-
+    override fun updateUrl(holder: MutableParametersHolder) {
+        // no-op
+    }
 }

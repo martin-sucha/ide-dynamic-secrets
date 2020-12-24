@@ -6,7 +6,6 @@ import com.goide.execution.extension.GoRunConfigurationExtension
 import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.execution.configurations.RunnerSettings
 import com.intellij.execution.process.ProcessEvent
-import com.intellij.execution.process.ProcessHandler
 import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.target.TargetedCommandLineBuilder
 import com.intellij.openapi.Disposable
@@ -15,19 +14,20 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.util.ClearableLazyValue
 import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.util.JDOMExternalizerUtil
 import com.intellij.openapi.util.Key
 import javax.swing.JComponent
 import com.intellij.ui.layout.panel
 import org.jdom.Element
 
-class DynamicSecretsGoRunConfigurationExtension() : GoRunConfigurationExtension() {
-    override fun patchCommandLine(configuration: GoRunConfigurationBase<*>,
-                                  runnerSettings: RunnerSettings?,
-                                  cmdLine: TargetedCommandLineBuilder,
-                                  runnerId: String,
-                                  state: GoRunningState<out GoRunConfigurationBase<*>>,
-                                  commandLineType: GoRunningState.CommandLineType) {
+class DynamicSecretsGoRunConfigurationExtension : GoRunConfigurationExtension() {
+    override fun patchCommandLine(
+            configuration: GoRunConfigurationBase<*>,
+            runnerSettings: RunnerSettings?,
+            cmdLine: TargetedCommandLineBuilder,
+            runnerId: String,
+            state: GoRunningState<out GoRunConfigurationBase<*>>,
+            commandLineType: GoRunningState.CommandLineType,
+    ) {
         if (commandLineType != GoRunningState.CommandLineType.RUN) {
             return
         }
@@ -40,7 +40,7 @@ class DynamicSecretsGoRunConfigurationExtension() : GoRunConfigurationExtension(
                 val value = secret[mapping.secretValueName]
                 if (value == null) {
                     val keys = secret.keys.sorted()
-                    throw RuntimeException("Secret ${secretConfiguration.path} does not have key " +
+                    throw VaultException("Secret ${secretConfiguration.path} does not have key " +
                             "${mapping.secretValueName}\nThe following keys are available: $keys")
                 }
                 cmdLine.addEnvironmentVariable(mapping.envVarName, value)
@@ -65,26 +65,7 @@ class DynamicSecretsGoRunConfigurationExtension() : GoRunConfigurationExtension(
         val secrets = mutableListOf<EnvVarSecret>()
         if (secretsElement != null) {
             for (secretElement in secretsElement.getChildren(ELEMENT_SECRETS_ITEM)) {
-                val path = secretElement.getAttributeValue(ATTR_PATH)
-                if (path == null) {
-                    throw RuntimeException("secret.path is not present")
-                }
-                val mappings = mutableListOf<EnvVarSecretMapping>()
-                for (envVarElement in secretElement.getChildren(ELEMENT_SECRETS_ENV_VAR)) {
-                    val envVarName = envVarElement.getAttributeValue(ATTR_ENV_VAR_NAME)
-                    if (envVarName == null) {
-                        throw RuntimeException("secret.envVar.name is not present")
-                    }
-                    val secretValueName = envVarElement.getAttributeValue(ATTR_ENV_VAR_SECRET_VALUE_NAME)
-                    if (secretValueName == null) {
-                        throw RuntimeException("secret.envVar.secretValueName is not present")
-                    }
-                    mappings.add(EnvVarSecretMapping(envVarName, secretValueName))
-                }
-                secrets.add(EnvVarSecret(
-                    path = path,
-                    envVarMapping = mappings,
-                ))
+                secrets.add(parseSecretElement(secretElement))
             }
         }
         val state = EnvVarConfiguration(secrets)
@@ -114,13 +95,39 @@ class DynamicSecretsGoRunConfigurationExtension() : GoRunConfigurationExtension(
     override fun getSerializationId(): String = SERIALIZATION_ID
 }
 
-private val SERIALIZATION_ID = "com.github.martinsucha.idedynamicsecrets"
-private val ELEMENT_SECRETS = "secrets"
-private val ELEMENT_SECRETS_ITEM = "secret"
-private val ELEMENT_SECRETS_ENV_VAR = "envVar"
-private val ATTR_PATH = "path"
-private val ATTR_ENV_VAR_NAME = "name"
-private val ATTR_ENV_VAR_SECRET_VALUE_NAME = "secretValueName"
+class ConfigurationException(message: String) : Exception(message)
+
+@Suppress("ThrowsCount")
+fun parseSecretElement(secretElement: Element): EnvVarSecret {
+    val path = secretElement.getAttributeValue(ATTR_PATH)
+    if (path == null) {
+        throw ConfigurationException("secret.path is not present")
+    }
+    val mappings = mutableListOf<EnvVarSecretMapping>()
+    for (envVarElement in secretElement.getChildren(ELEMENT_SECRETS_ENV_VAR)) {
+        val envVarName = envVarElement.getAttributeValue(ATTR_ENV_VAR_NAME)
+        if (envVarName == null) {
+            throw ConfigurationException("secret.envVar.name is not present")
+        }
+        val secretValueName = envVarElement.getAttributeValue(ATTR_ENV_VAR_SECRET_VALUE_NAME)
+        if (secretValueName == null) {
+            throw ConfigurationException("secret.envVar.secretValueName is not present")
+        }
+        mappings.add(EnvVarSecretMapping(envVarName, secretValueName))
+    }
+    return EnvVarSecret(
+        path = path,
+        envVarMapping = mappings,
+    )
+}
+
+private const val SERIALIZATION_ID = "com.github.martinsucha.idedynamicsecrets"
+private const val ELEMENT_SECRETS = "secrets"
+private const val ELEMENT_SECRETS_ITEM = "secret"
+private const val ELEMENT_SECRETS_ENV_VAR = "envVar"
+private const val ATTR_PATH = "path"
+private const val ATTR_ENV_VAR_NAME = "name"
+private const val ATTR_ENV_VAR_SECRET_VALUE_NAME = "secretValueName"
 
 class DynamicSecretsProcessListener : ProcessListener {
     override fun startNotified(p0: ProcessEvent) {
@@ -132,13 +139,13 @@ class DynamicSecretsProcessListener : ProcessListener {
     }
 
     override fun onTextAvailable(p0: ProcessEvent, p1: Key<*>) {
+        // no-op
     }
-
 }
 
 private val EDITOR_KEY = Key<EnvVarConfiguration>("Dynamic Secrets settings")
 
-class DynamicSecretsSettingsEditor<P : RunConfigurationBase<*>>(val project : Project) : SettingsEditor<P>() {
+class DynamicSecretsSettingsEditor<P : RunConfigurationBase<*>>(val project: Project) : SettingsEditor<P>() {
 
     private var disposable: Disposable? = null
 
@@ -192,7 +199,3 @@ class DynamicSecretsSettingsEditor<P : RunConfigurationBase<*>>(val project : Pr
         panel.drop()
     }
 }
-
-
-
-
