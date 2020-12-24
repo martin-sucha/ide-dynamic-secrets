@@ -7,19 +7,19 @@ plugins {
     // Java support
     id("java")
     // Kotlin support
-    id("org.jetbrains.kotlin.jvm") version "1.4.20"
+    id("org.jetbrains.kotlin.jvm") version "1.4.21"
     // gradle-intellij-plugin - read more: https://github.com/JetBrains/gradle-intellij-plugin
     id("org.jetbrains.intellij") version "0.6.5"
     // gradle-changelog-plugin - read more: https://github.com/JetBrains/gradle-changelog-plugin
     id("org.jetbrains.changelog") version "0.6.2"
     // detekt linter - read more: https://detekt.github.io/detekt/gradle.html
-    id("io.gitlab.arturbosch.detekt") version "1.14.2"
+    id("io.gitlab.arturbosch.detekt") version "1.15.0"
     // ktlint linter - read more: https://github.com/JLLeitschuh/ktlint-gradle
     id("org.jlleitschuh.gradle.ktlint") version "9.4.1"
     // dependency checker
     id("com.github.ben-manes.versions") version "0.36.0"
     // Kotlin serialization
-    id("org.jetbrains.kotlin.plugin.serialization") version "1.4.20"
+    id("org.jetbrains.kotlin.plugin.serialization") version "1.4.21"
 }
 
 // Import variables from gradle.properties file
@@ -46,9 +46,9 @@ repositories {
     jcenter()
 }
 dependencies {
-    detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.14.2")
+    detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.15.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.1")
-    implementation("org.jetbrains.kotlin:kotlin-reflect:1.4.20")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:1.4.21")
 }
 
 // Configure gradle-intellij-plugin plugin.
@@ -59,6 +59,7 @@ intellij {
     type = platformType
     downloadSources = platformDownloadSources.toBoolean()
     updateSinceUntilBuild = true
+//    localPath = "/home/martin/.local/share/JetBrains/Toolbox/apps/Goland/ch-0/203.5981.98"
 
     // Plugin Dependencies. Uses `platformPlugins` property from the gradle.properties file.
     setPlugins(*platformPlugins.split(',').map(String::trim).filter(String::isNotEmpty).toTypedArray())
@@ -83,10 +84,8 @@ tasks {
         sourceCompatibility = "1.8"
         targetCompatibility = "1.8"
     }
-    listOf("compileKotlin", "compileTestKotlin").forEach {
-        getByName<KotlinCompile>(it) {
-            kotlinOptions.jvmTarget = "1.8"
-        }
+    withType<KotlinCompile> {
+        kotlinOptions.jvmTarget = "1.8"
     }
 
     withType<Detekt> {
