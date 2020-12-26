@@ -43,16 +43,16 @@ class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
 
             val secret = vault.fetchSecret(token, path)
 
-            if (!secret.containsKey(usernameKey)) {
+            if (!secret.data.containsKey(usernameKey)) {
                 throw VaultException("key $usernameKey is not present in secret")
             }
 
-            if (!secret.containsKey(passwordKey)) {
+            if (!secret.data.containsKey(passwordKey)) {
                 throw VaultException("key $passwordKey is not present in secret")
             }
 
-            proto.connectionProperties["user"] = secret[usernameKey]
-            proto.connectionProperties["password"] = secret[passwordKey]
+            proto.connectionProperties["user"] = secret.data[usernameKey]
+            proto.connectionProperties["password"] = secret.data[passwordKey]
 
             proto
         }

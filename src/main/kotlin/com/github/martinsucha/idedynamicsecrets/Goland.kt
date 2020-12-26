@@ -34,12 +34,34 @@ class DynamicSecretsGoRunConfigurationExtension : GoRunConfigurationExtension() 
         val envVarConfiguration = configuration.getUserData(EDITOR_KEY) ?: return
         val vault = configuration.project.getService(Vault::class.java)
         val token = vault.getToken()
+        val leaseIDs = mutableSetOf<String>()
+        val leaseDisposable = RunConfigurationLeases(vault, leaseIDs)
+        Disposer.register(vault, leaseDisposable)
+        try {
+            fetchSecrets(vault, token, envVarConfiguration, cmdLine, leaseIDs)
+        } catch (e: VaultException) {
+            Disposer.dispose(leaseDisposable)
+            throw e
+        }
+        state.addProcessListener(DynamicSecretsProcessListener(leaseDisposable))
+    }
+
+    private fun fetchSecrets(
+        vault: Vault,
+        token: String,
+        envVarConfiguration: EnvVarConfiguration,
+        cmdLine: TargetedCommandLineBuilder,
+        leaseIDs: MutableSet<String>,
+    ) {
         for (secretConfiguration in envVarConfiguration.secrets) {
             val secret = vault.fetchSecret(token, secretConfiguration.path)
+            if (secret.leaseID != "") {
+                leaseIDs.add(secret.leaseID)
+            }
             for (mapping in secretConfiguration.envVarMapping) {
-                val value = secret[mapping.secretValueName]
+                val value = secret.data[mapping.secretValueName]
                 if (value == null) {
-                    val keys = secret.keys.sorted()
+                    val keys = secret.data.keys.sorted()
                     throw VaultException(
                         "Secret ${secretConfiguration.path} does not have key " +
                             "${mapping.secretValueName}\nThe following keys are available: $keys"
@@ -48,7 +70,6 @@ class DynamicSecretsGoRunConfigurationExtension : GoRunConfigurationExtension() 
                 cmdLine.addEnvironmentVariable(mapping.envVarName, value)
             }
         }
-        state.addProcessListener(DynamicSecretsProcessListener())
     }
 
     override fun isApplicableFor(p0: GoRunConfigurationBase<*>): Boolean = true
@@ -97,6 +118,27 @@ class DynamicSecretsGoRunConfigurationExtension : GoRunConfigurationExtension() 
     override fun getSerializationId(): String = SERIALIZATION_ID
 }
 
+class RunConfigurationLeases(private val vault: Vault, private val leaseIDs: Set<String>) : Disposable {
+    override fun dispose() {
+        val token = vault.getToken()
+        val exceptions = mutableListOf<VaultException>()
+        for (leaseID in leaseIDs) {
+            try {
+                vault.revokeLease(token, leaseID)
+            } catch (e: VaultException) {
+                exceptions.add(e)
+            }
+        }
+        if (exceptions.isNotEmpty()) {
+            throw VaultException(
+                exceptions.joinToString("\n") {
+                    it.toString()
+                }
+            )
+        }
+    }
+}
+
 class ConfigurationException(message: String) : Exception(message)
 
 @Suppress("ThrowsCount")
@@ -131,13 +173,13 @@ private const val ATTR_PATH = "path"
 private const val ATTR_ENV_VAR_NAME = "name"
 private const val ATTR_ENV_VAR_SECRET_VALUE_NAME = "secretValueName"
 
-class DynamicSecretsProcessListener : ProcessListener {
+class DynamicSecretsProcessListener(private val disposable: Disposable) : ProcessListener {
     override fun startNotified(p0: ProcessEvent) {
-        println("start notified")
+        // no-op
     }
 
     override fun processTerminated(p0: ProcessEvent) {
-        println("process terminated")
+        Disposer.dispose(disposable)
     }
 
     override fun onTextAvailable(p0: ProcessEvent, p1: Key<*>) {

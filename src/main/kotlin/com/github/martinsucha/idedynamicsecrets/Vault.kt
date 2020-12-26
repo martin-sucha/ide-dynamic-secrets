@@ -3,6 +3,7 @@ package com.github.martinsucha.idedynamicsecrets
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.ScriptRunnerUtil
+import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.PersistentStateComponent
 import com.intellij.openapi.components.State
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
@@ -11,6 +12,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.layout.panel
 import com.intellij.util.SystemProperties
+import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
 import com.intellij.util.io.HttpRequests
 import com.intellij.util.xmlb.XmlSerializerUtil
 import kotlinx.serialization.json.Json
@@ -28,7 +30,7 @@ data class VaultState(
 @State(
     name = "com.github.martinsucha.idedynamicsecrets.Vault",
 )
-class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateComponent<VaultState> {
+class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateComponent<VaultState>, Disposable {
     val configuration = VaultState()
 
     override fun getState() = configuration
@@ -54,12 +56,39 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
      * Fetches a vault secret by path.
      * path does not start with slash.
      */
-    fun fetchSecret(token: String, path: String): Map<String, String> {
-        val jsonData = HttpRequests.request(secretURL(configuration.vaultAddress, path))
-            .tuner {
-                it.setRequestProperty("X-Vault-Token", token)
-            }.readString()
+    fun fetchSecret(token: String, path: String): VaultSecret {
+        val jsonData = try {
+            HttpRequests.request(secretURL(configuration.vaultAddress, path))
+                .tuner {
+                    it.setRequestProperty("X-Vault-Token", token)
+                }.readString()
+        } catch (e: IOException) {
+            throw VaultException("Fetching secret $path from Vault: ${e.message}", e)
+        }
         return parseSecret(jsonData)
+    }
+
+    @RequiresBackgroundThread
+    fun revokeLease(token: String, leaseID: String) {
+        // https://www.vaultproject.io/api-docs/system/leases#revoke-lease
+        val url = joinURL(configuration.vaultAddress, "/v1/sys/leases/revoke")
+        val requestData = JsonObject(mapOf("lease_id" to JsonPrimitive(leaseID)))
+        try {
+            HttpRequests.put(url, "application/json").tuner {
+                it.setRequestProperty("X-Vault-Token", token)
+            }
+                .throwStatusCodeException(true)
+                .connect {
+                    it.write(requestData.toString())
+                    it.readString()
+                }
+        } catch (e: IOException) {
+            throw VaultException("Revoke lease $leaseID: ${e.message}", e)
+        }
+    }
+
+    override fun dispose() {
+        // no-op, Vault disposable is used as parent for other disposables.
     }
 }
 
@@ -81,31 +110,53 @@ fun getTokenFromHelper(helperPath: String): String {
     ).trim()
 }
 
-fun secretURL(vaultURL: String, secretPath: String): String {
-    val baseURI = URI(vaultURL)
+fun secretURL(vaultURL: String, secretPath: String): String = joinURL(vaultURL, "/v1/$secretPath")
+
+fun joinURL(baseURL: String, path: String): String {
+    val baseURI = URI(baseURL)
     val basePathWithoutSlash = if (baseURI.path.endsWith("/")) {
         baseURI.path.dropLast(1)
     } else {
         baseURI.path
     }
-    val path = "$basePathWithoutSlash/v1/$secretPath"
+    val pathWithoutSlash = if (path.startsWith("/")) {
+        path.drop(1)
+    } else {
+        path
+    }
+    val joinedPath = "$basePathWithoutSlash/$pathWithoutSlash"
     return URI(
         baseURI.scheme,
         baseURI.authority,
-        path,
+        joinedPath,
         null,
         null,
     ).toASCIIString()
 }
 
-class VaultException(message: String) : Exception(message)
+class VaultException(message: String, cause: Throwable? = null) : Exception(message, cause)
+
+data class VaultSecret(
+    val data: Map<String, String>,
+    val leaseID: String,
+)
 
 @Suppress("ThrowsCount")
-fun parseSecret(jsonData: String): Map<String, String> {
+fun parseSecret(jsonData: String): VaultSecret {
     val el = Json.parseToJsonElement(jsonData)
     if (el !is JsonObject) {
         throw VaultException("Parsing vault secret: root not a JSON object")
     }
+    val lease = el.getOrElse(
+        "lease_id",
+        {
+            throw VaultException("Parsing vault secret: lease key not found")
+        }
+    )
+    if (lease !is JsonPrimitive || !lease.isString) {
+        throw VaultException("Parsing vault secret: lease is not primitive string")
+    }
+    val leaseID = lease.content
     val data = el.getOrElse(
         "data",
         {
@@ -125,13 +176,17 @@ fun parseSecret(jsonData: String): Map<String, String> {
     } else {
         data
     }
-    return secretValues.mapValues {
+    val secretData = secretValues.mapValues {
         val value = it.value
         if (value !is JsonPrimitive || !value.isString) {
             throw VaultException("Parsing vault secret: value ${it.key} is not a string")
         }
         value.content
     }
+    return VaultSecret(
+        data = secretData,
+        leaseID = leaseID,
+    )
 }
 
 class VaultConfigurable(private val project: Project) : BoundConfigurable("Dynamic secrets") {
