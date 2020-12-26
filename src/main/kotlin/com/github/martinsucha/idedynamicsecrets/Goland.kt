@@ -15,18 +15,18 @@ import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.util.ClearableLazyValue
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
-import javax.swing.JComponent
 import com.intellij.ui.layout.panel
 import org.jdom.Element
+import javax.swing.JComponent
 
 class DynamicSecretsGoRunConfigurationExtension : GoRunConfigurationExtension() {
     override fun patchCommandLine(
-            configuration: GoRunConfigurationBase<*>,
-            runnerSettings: RunnerSettings?,
-            cmdLine: TargetedCommandLineBuilder,
-            runnerId: String,
-            state: GoRunningState<out GoRunConfigurationBase<*>>,
-            commandLineType: GoRunningState.CommandLineType,
+        configuration: GoRunConfigurationBase<*>,
+        runnerSettings: RunnerSettings?,
+        cmdLine: TargetedCommandLineBuilder,
+        runnerId: String,
+        state: GoRunningState<out GoRunConfigurationBase<*>>,
+        commandLineType: GoRunningState.CommandLineType,
     ) {
         if (commandLineType != GoRunningState.CommandLineType.RUN) {
             return
@@ -40,8 +40,10 @@ class DynamicSecretsGoRunConfigurationExtension : GoRunConfigurationExtension() 
                 val value = secret[mapping.secretValueName]
                 if (value == null) {
                     val keys = secret.keys.sorted()
-                    throw VaultException("Secret ${secretConfiguration.path} does not have key " +
-                            "${mapping.secretValueName}\nThe following keys are available: $keys")
+                    throw VaultException(
+                        "Secret ${secretConfiguration.path} does not have key " +
+                            "${mapping.secretValueName}\nThe following keys are available: $keys"
+                    )
                 }
                 cmdLine.addEnvironmentVariable(mapping.envVarName, value)
             }

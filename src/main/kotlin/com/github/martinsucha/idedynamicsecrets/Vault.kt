@@ -1,5 +1,6 @@
 package com.github.martinsucha.idedynamicsecrets
 
+import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.GeneralCommandLine
 import com.intellij.execution.process.ScriptRunnerUtil
 import com.intellij.openapi.components.PersistentStateComponent
@@ -10,23 +11,22 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.layout.panel
 import com.intellij.util.SystemProperties
-import com.intellij.util.xmlb.XmlSerializerUtil
-import java.io.IOException
-import java.nio.file.Paths
-import com.intellij.execution.ExecutionException
 import com.intellij.util.io.HttpRequests
+import com.intellij.util.xmlb.XmlSerializerUtil
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.io.IOException
 import java.net.URI
+import java.nio.file.Paths
 
 data class VaultState(
-        var vaultAddress: String = "",
-        var tokenHelperPath: String = "",
+    var vaultAddress: String = "",
+    var tokenHelperPath: String = "",
 )
 
 @State(
-        name = "com.github.martinsucha.idedynamicsecrets.Vault",
+    name = "com.github.martinsucha.idedynamicsecrets.Vault",
 )
 class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateComponent<VaultState> {
     val configuration = VaultState()
@@ -74,8 +74,11 @@ private const val TOKEN_HELPER_TIMEOUT_MILLIS = 1000L
 
 fun getTokenFromHelper(helperPath: String): String {
     val cmdLine = GeneralCommandLine(helperPath, "get")
-    return ScriptRunnerUtil.getProcessOutput(cmdLine, ScriptRunnerUtil.STDOUT_OUTPUT_KEY_FILTER,
-        TOKEN_HELPER_TIMEOUT_MILLIS).trim()
+    return ScriptRunnerUtil.getProcessOutput(
+        cmdLine,
+        ScriptRunnerUtil.STDOUT_OUTPUT_KEY_FILTER,
+        TOKEN_HELPER_TIMEOUT_MILLIS
+    ).trim()
 }
 
 fun secretURL(vaultURL: String, secretPath: String): String {
@@ -103,9 +106,12 @@ fun parseSecret(jsonData: String): Map<String, String> {
     if (el !is JsonObject) {
         throw VaultException("Parsing vault secret: root not a JSON object")
     }
-    val data = el.getOrElse("data", {
-        throw VaultException("Parsing vault secret: data object not found")
-    })
+    val data = el.getOrElse(
+        "data",
+        {
+            throw VaultException("Parsing vault secret: data object not found")
+        }
+    )
     if (data !is JsonObject) {
         throw VaultException("Parsing vault secret: data is not an object")
     }
@@ -139,17 +145,18 @@ class VaultConfigurable(private val project: Project) : BoundConfigurable("Dynam
         }
         row {
             label("Token helper:")
-            textFieldWithBrowseButton(vault.configuration::tokenHelperPath,
-                    browseDialogTitle = "Choose token helper program",
-                    project = project,
-                    fileChooserDescriptor = FileChooserDescriptor(
-                            true,
-                            false,
-                            false,
-                            false,
-                            false,
-                            false
-                    )
+            textFieldWithBrowseButton(
+                vault.configuration::tokenHelperPath,
+                browseDialogTitle = "Choose token helper program",
+                project = project,
+                fileChooserDescriptor = FileChooserDescriptor(
+                    true,
+                    false,
+                    false,
+                    false,
+                    false,
+                    false
+                )
             )
         }
     }

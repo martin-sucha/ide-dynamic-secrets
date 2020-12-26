@@ -21,8 +21,8 @@ const val DATABASE_PASSWORD_KEY_PROPERTY = "com.github.martinsucha.idedynamicsec
 
 class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
     override fun intercept(
-            proto: DatabaseConnectionInterceptor.ProtoConnection,
-            silent: Boolean
+        proto: DatabaseConnectionInterceptor.ProtoConnection,
+        silent: Boolean
     ): CompletionStage<DatabaseConnectionInterceptor.ProtoConnection>? {
         return CompletableFuture.supplyAsync {
             val path = proto.connectionPoint.additionalJdbcProperties[DATABASE_PATH_PROPERTY]
@@ -67,18 +67,18 @@ class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
     override fun isApplicableAsDefault(dataSource: LocalDataSource): Boolean = true
 
     override fun createWidget(
-            project: Project?,
-            credentials: DatabaseCredentials,
-            dataSource: LocalDataSource
+        project: Project?,
+        credentials: DatabaseCredentials,
+        dataSource: LocalDataSource
     ): DatabaseAuthProvider.AuthWidget {
         return DynamicSecretsAuthWidget()
     }
 }
 
 data class DatabaseSecretConfiguration(
-        var path: String = "",
-        var usernameKey: String = "username",
-        var passwordKey: String = "password",
+    var path: String = "",
+    var usernameKey: String = "username",
+    var passwordKey: String = "password",
 )
 
 @Suppress("TooManyFunctions")

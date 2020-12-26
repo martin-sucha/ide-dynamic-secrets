@@ -112,8 +112,8 @@ class EditEnvVarSecretDialog(secret: EnvVarSecret) : DialogWrapper(true) {
 data class EnvVarConfiguration(val secrets: List<EnvVarSecret>)
 
 data class EnvVarSecret(
-        var path: String = "",
-        var envVarMapping: MutableList<EnvVarSecretMapping> = mutableListOf(),
+    var path: String = "",
+    var envVarMapping: MutableList<EnvVarSecretMapping> = mutableListOf(),
 ) {
     fun deepCopy(): EnvVarSecret {
         val mappingCopies = mutableListOf<EnvVarSecretMapping>()
@@ -129,17 +129,17 @@ data class EnvVarSecret(
 }
 
 data class EnvVarSecretMapping(
-        var envVarName: String = "",
-        var secretValueName: String = "",
+    var envVarName: String = "",
+    var secretValueName: String = "",
 )
 
 class EnvVarListCellRenderer : ColoredListCellRenderer<EnvVarSecret>() {
     override fun customizeCellRenderer(
-            list: JList<out EnvVarSecret>,
-            value: EnvVarSecret,
-            index: Int,
-            selected: Boolean,
-            hasFocus: Boolean
+        list: JList<out EnvVarSecret>,
+        value: EnvVarSecret,
+        index: Int,
+        selected: Boolean,
+        hasFocus: Boolean
     ) {
         if (value.path == "") {
             append("path not set", SimpleTextAttributes.REGULAR_ITALIC_ATTRIBUTES)
