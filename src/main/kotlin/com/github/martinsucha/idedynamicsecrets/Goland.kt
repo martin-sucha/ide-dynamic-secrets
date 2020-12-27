@@ -35,7 +35,7 @@ class DynamicSecretsGoRunConfigurationExtension : GoRunConfigurationExtension() 
         val vault = configuration.project.getService(Vault::class.java)
         val token = vault.getToken()
         val leaseIDs = mutableSetOf<String>()
-        val leaseDisposable = RunConfigurationLeases(vault, leaseIDs)
+        val leaseDisposable = RunConfigurationLeases(vault, leaseIDs, configuration.project)
         Disposer.register(vault, leaseDisposable)
         try {
             fetchSecrets(vault, token, envVarConfiguration, cmdLine, leaseIDs)
@@ -118,23 +118,19 @@ class DynamicSecretsGoRunConfigurationExtension : GoRunConfigurationExtension() 
     override fun getSerializationId(): String = SERIALIZATION_ID
 }
 
-class RunConfigurationLeases(private val vault: Vault, private val leaseIDs: Set<String>) : Disposable {
+class RunConfigurationLeases(
+    private val vault: Vault,
+    private val leaseIDs: Set<String>,
+    private val project: Project,
+) : Disposable {
     override fun dispose() {
         val token = vault.getToken()
-        val exceptions = mutableListOf<VaultException>()
         for (leaseID in leaseIDs) {
             try {
                 vault.revokeLease(token, leaseID)
             } catch (e: VaultException) {
-                exceptions.add(e)
+                notifyError(project, "Error revoking lease: ${e.message}")
             }
-        }
-        if (exceptions.isNotEmpty()) {
-            throw VaultException(
-                exceptions.joinToString("\n") {
-                    it.toString()
-                }
-            )
         }
     }
 }

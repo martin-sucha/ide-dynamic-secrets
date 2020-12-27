@@ -77,13 +77,12 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
             HttpRequests.put(url, "application/json").tuner {
                 it.setRequestProperty("X-Vault-Token", token)
             }
-                .throwStatusCodeException(true)
                 .connect {
                     it.write(requestData.toString())
                     it.readString()
                 }
         } catch (e: IOException) {
-            throw VaultException("Revoke lease $leaseID: ${e.message}", e)
+            throw VaultException("Revoke lease $leaseID: $e", e)
         }
     }
 
