@@ -6,8 +6,18 @@
     <!-- Product and plugin compatibility requirements -->
     <!-- https://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html -->
     <depends>com.intellij.modules.platform</depends>
-    <depends>org.jetbrains.plugins.go</depends>
-    <depends>com.intellij.database</depends>
+    <depends
+            optional="true"
+            config-file="com.github.martinsucha.idedynamicsecrets-GoLand.xml"
+    >org.jetbrains.plugins.go</depends>
+    <depends
+            optional="true"
+            config-file="com.github.martinsucha.idedynamicsecrets-Database.xml"
+    >com.intellij.database</depends>
+    <depends
+            optional="true"
+            config-file="com.github.martinsucha.idedynamicsecrets-PyCharm.xml"
+    >com.intellij.modules.python</depends>
 
     <extensions defaultExtensionNs="com.intellij">
         <projectService serviceImplementation="com.github.martinsucha.idedynamicsecrets.Vault"/>
@@ -17,13 +27,4 @@
         <notificationGroup id="Dynamic Secrets" displayType="BALLOON" key="notification.group.name"/>
     </extensions>
 
-    <extensions defaultExtensionNs="com.goide">
-        <runConfigurationExtension
-                implementation="com.github.martinsucha.idedynamicsecrets.DynamicSecretsGoRunConfigurationExtension"
-                id="dynamicsecretsGoland"/>
-    </extensions>
-
-    <extensions defaultExtensionNs="com.intellij.database">
-        <connectionInterceptor implementation="com.github.martinsucha.idedynamicsecrets.DynamicSecretsAuthCredentialsProvider" order="first"/>
-    </extensions>
 </idea-plugin>
