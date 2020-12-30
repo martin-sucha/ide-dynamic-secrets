@@ -4,13 +4,8 @@ import com.goide.execution.GoRunConfigurationBase
 import com.goide.execution.GoRunningState
 import com.goide.execution.extension.GoRunConfigurationExtension
 import com.intellij.execution.configurations.RunnerSettings
-import com.intellij.execution.process.ProcessEvent
-import com.intellij.execution.process.ProcessListener
 import com.intellij.execution.target.TargetedCommandLineBuilder
-import com.intellij.openapi.Disposable
 import com.intellij.openapi.options.SettingsEditor
-import com.intellij.openapi.util.Disposer
-import com.intellij.openapi.util.Key
 import org.jdom.Element
 
 class DynamicSecretsGoRunConfigurationExtension : GoRunConfigurationExtension() {
@@ -55,18 +50,4 @@ class DynamicSecretsGoRunConfigurationExtension : GoRunConfigurationExtension() 
     }
 
     override fun getSerializationId(): String = SERIALIZATION_ID
-}
-
-class DynamicSecretsProcessListener(private val disposable: Disposable) : ProcessListener {
-    override fun startNotified(p0: ProcessEvent) {
-        // no-op
-    }
-
-    override fun processTerminated(p0: ProcessEvent) {
-        Disposer.dispose(disposable)
-    }
-
-    override fun onTextAvailable(p0: ProcessEvent, p1: Key<*>) {
-        // no-op
-    }
 }
