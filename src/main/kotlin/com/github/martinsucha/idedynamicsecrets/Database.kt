@@ -2,13 +2,20 @@ package com.github.martinsucha.idedynamicsecrets
 
 import com.intellij.database.access.DatabaseCredentials
 import com.intellij.database.dataSource.DatabaseAuthProvider
+import com.intellij.database.dataSource.DatabaseConnection
 import com.intellij.database.dataSource.DatabaseConnectionInterceptor
+import com.intellij.database.dataSource.DatabaseConnectionManager
 import com.intellij.database.dataSource.LocalDataSource
 import com.intellij.database.dataSource.url.template.MutableParametersHolder
 import com.intellij.database.dataSource.url.template.ParametersHolder
+import com.intellij.database.run.ConsoleRunConfiguration
+import com.intellij.openapi.Disposable
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.openapi.util.Disposer
 import com.intellij.ui.layout.panel
+import java.util.LinkedList
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
 import javax.swing.JComponent
@@ -42,14 +49,21 @@ class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
             val token = vault.getToken()
 
             val secret = vault.fetchSecret(token, path)
+            val lease = DatabaseLease(vault, secret.leaseID, proto.runConfiguration.project)
+            Disposer.register(vault, lease)
 
             if (!secret.data.containsKey(usernameKey)) {
+                Disposer.dispose(lease)
                 throw VaultException("key $usernameKey is not present in secret")
             }
 
             if (!secret.data.containsKey(passwordKey)) {
+                Disposer.dispose(lease)
                 throw VaultException("key $passwordKey is not present in secret")
             }
+
+            val leaseHolder = proto.runConfiguration.project.getService(DatabaseConnectionLeaseHolder::class.java)
+            leaseHolder.registerNewLease(lease, proto.runConfiguration)
 
             proto.connectionProperties["user"] = secret.data[usernameKey]
             proto.connectionProperties["password"] = secret.data[passwordKey]
@@ -141,4 +155,72 @@ class DynamicSecretsAuthWidget : DatabaseAuthProvider.AuthWidget {
     override fun updateUrl(holder: MutableParametersHolder) {
         // no-op
     }
+}
+
+class DatabaseLease(private val vault: Vault, private val leaseID: String, private val project: Project) : Disposable {
+    override fun dispose() {
+        val runnable = Runnable {
+            try {
+                val token = vault.getToken()
+                vault.revokeLease(token, leaseID)
+            } catch (e: VaultException) {
+                notifyError(project, "Error revoking lease: ${e.message}")
+            }
+        }
+        ProgressManager.getInstance().runProcessWithProgressSynchronously(
+            runnable,
+            "Revoking Vault lease",
+            false,
+            project,
+            null
+        )
+    }
+}
+
+class DatabaseConnectionListener : DatabaseConnectionManager.Listener {
+    override fun connectionChanged(connection: DatabaseConnection, added: Boolean) {
+        val leaseHolder = connection.configuration.project.getService(DatabaseConnectionLeaseHolder::class.java)
+        if (added) {
+            leaseHolder.registerConnection(connection)
+        } else {
+            val lease = leaseHolder.unregisterConnection(connection)
+            if (lease != null) {
+                Disposer.dispose(lease)
+            }
+        }
+    }
+}
+
+class DatabaseConnectionLeaseHolder(@Suppress("UNUSED_PARAMETER") project: Project) {
+
+    private val lock = Any()
+    private val newLeases = mutableMapOf<Int, LinkedList<Disposable>>()
+    private val leaseByConnection = mutableMapOf<Int, Disposable>()
+
+    fun registerNewLease(d: Disposable, configuration: ConsoleRunConfiguration) {
+        synchronized(lock) {
+            val key = configuration.uniqueID
+            val list = newLeases.computeIfAbsent(key) { LinkedList<Disposable>() }
+            list.add(d)
+        }
+    }
+
+    fun registerConnection(connection: DatabaseConnection) {
+        synchronized(lock) {
+            val list = newLeases[connection.configuration.uniqueID]
+            if (list == null) {
+                return
+            }
+            val lease = list.removeFirst()
+            leaseByConnection[connectionKey(connection)] = lease
+        }
+    }
+
+    fun unregisterConnection(connection: DatabaseConnection): Disposable? {
+        synchronized(lock) {
+            return leaseByConnection.remove(connectionKey(connection))
+        }
+    }
+
+    private fun connectionKey(connection: DatabaseConnection) = System.identityHashCode(connection)
 }
