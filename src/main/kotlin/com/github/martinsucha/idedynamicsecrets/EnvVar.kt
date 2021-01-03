@@ -201,7 +201,11 @@ data class EnvVarsResult(
 
 fun buildEnvVars(project: Project, envVarConfiguration: EnvVarConfiguration): EnvVarsResult {
     val vault = project.getService(Vault::class.java)
-    val token = vault.getToken()
+    val token = try {
+        vault.getToken()
+    } catch (e: VaultException) {
+        throw ExecutionException(e)
+    }
     val leaseIDs = mutableSetOf<String>()
     val leaseDisposable = RunConfigurationLeases(vault, leaseIDs, project)
     Disposer.register(vault, leaseDisposable)
@@ -250,7 +254,12 @@ class RunConfigurationLeases(
     private val project: Project,
 ) : Disposable {
     override fun dispose() {
-        val token = vault.getToken()
+        val token = try {
+            vault.getToken()
+        } catch (e: VaultException) {
+            notifyError(project, "Error revoking leases: ${e.message}")
+            return
+        }
         for (leaseID in leaseIDs) {
             try {
                 vault.revokeLease(token, leaseID)

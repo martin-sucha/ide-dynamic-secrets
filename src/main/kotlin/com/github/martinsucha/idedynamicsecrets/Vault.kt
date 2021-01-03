@@ -2,6 +2,7 @@ package com.github.martinsucha.idedynamicsecrets
 
 import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.GeneralCommandLine
+import com.intellij.execution.process.OSProcessHandler
 import com.intellij.execution.process.ScriptRunnerUtil
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.components.PersistentStateComponent
@@ -39,16 +40,20 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
     }
 
     fun getToken(): String {
-        return try {
-            if (configuration.tokenHelperPath != "") {
+        return if (configuration.tokenHelperPath != "") {
+            try {
                 getTokenFromHelper(configuration.tokenHelperPath, configuration.vaultAddress)
-            } else {
-                getTokenFromFile()
+            } catch (e: ExecutionException) {
+                throw VaultException("Error getting token from helper: ${e.message}", e)
             }
-        } catch (e: IOException) {
-            ""
-        } catch (e: ExecutionException) {
-            ""
+
+        } else {
+            try {
+                getTokenFromFile()
+            } catch (e: IOException) {
+                throw VaultException("Error getting token from cli file: ${e.message}\n" +
+                        "Use `vault login` to create it or configure token helper.", e)
+            }
         }
     }
 
@@ -103,11 +108,17 @@ private const val TOKEN_HELPER_TIMEOUT_MILLIS = 1000L
 fun getTokenFromHelper(helperPath: String, vaultAddress: String): String {
     val cmdLine = GeneralCommandLine(helperPath, "get")
     cmdLine.environment["VAULT_ADDR"] = vaultAddress
-    return ScriptRunnerUtil.getProcessOutput(
-        cmdLine,
+    val handler = OSProcessHandler(cmdLine)
+    val token = ScriptRunnerUtil.getProcessOutput(
+        handler,
         ScriptRunnerUtil.STDOUT_OUTPUT_KEY_FILTER,
         TOKEN_HELPER_TIMEOUT_MILLIS
     ).trim()
+    val exitCode = handler.exitCode
+    if (exitCode != 0) {
+        throw ExecutionException("Token helper returned non-zero exit code $exitCode")
+    }
+    return token
 }
 
 fun secretURL(vaultURL: String, secretPath: String): String = joinURL(vaultURL, "/v1/$secretPath")
