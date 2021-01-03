@@ -78,7 +78,9 @@ class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
 
     override fun isApplicable(dataSource: LocalDataSource): Boolean = true
 
-    override fun isApplicableAsDefault(dataSource: LocalDataSource): Boolean = true
+    override fun isApplicableAsDefault(dataSource: LocalDataSource): Boolean {
+        return dataSource.authProviderId == DATABASE_CREDENTIAL_PROVIDER_ID
+    }
 
     override fun createWidget(
         project: Project?,
