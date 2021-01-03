@@ -4,12 +4,14 @@ import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.options.SettingsEditor
+import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.ui.DialogWrapper
 import com.intellij.openapi.util.ClearableLazyValue
 import com.intellij.openapi.util.Disposer
 import com.intellij.openapi.util.Key
+import com.intellij.openapi.util.ThrowableComputable
 import com.intellij.ui.CollectionListModel
 import com.intellij.ui.ColoredListCellRenderer
 import com.intellij.ui.DoubleClickListener
@@ -198,6 +200,17 @@ data class EnvVarsResult(
     val vars: Map<String, String>,
     val disposable: Disposable,
 )
+
+fun buildEnvVarsWithProgress(project: Project, envVarConfiguration: EnvVarConfiguration): EnvVarsResult {
+    return ProgressManager.getInstance().runProcessWithProgressSynchronously(
+        ThrowableComputable<EnvVarsResult, ExecutionException> {
+            buildEnvVars(project, envVarConfiguration)
+        },
+        "Fetching vault secrets",
+        false,
+        project,
+    )
+}
 
 fun buildEnvVars(project: Project, envVarConfiguration: EnvVarConfiguration): EnvVarsResult {
     val vault = project.getService(Vault::class.java)

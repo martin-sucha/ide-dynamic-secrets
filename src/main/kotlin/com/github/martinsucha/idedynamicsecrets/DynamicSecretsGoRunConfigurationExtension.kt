@@ -21,7 +21,7 @@ class DynamicSecretsGoRunConfigurationExtension : GoRunConfigurationExtension() 
             return
         }
         val envVarConfiguration = configuration.getUserData(EDITOR_KEY) ?: return
-        val result = buildEnvVars(configuration.project, envVarConfiguration)
+        val result = buildEnvVarsWithProgress(configuration.project, envVarConfiguration)
         for (envVar in result.vars) {
             cmdLine.addEnvironmentVariable(envVar.key, envVar.value)
         }

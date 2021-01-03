@@ -26,7 +26,7 @@ class DynamicSecretsPythonRunConfigurationExtension : PythonRunConfigurationExte
         runnerId: String
     ) {
         val envVarConfiguration = configuration.getUserData(EDITOR_KEY) ?: return
-        val result = buildEnvVars(configuration.project, envVarConfiguration)
+        val result = buildEnvVarsWithProgress(configuration.project, envVarConfiguration)
         cmdLine.environment.putAll(result.vars)
         synchronized(disposeOnProcessEnd) {
             disposeOnProcessEnd.addLast(result.disposable)
