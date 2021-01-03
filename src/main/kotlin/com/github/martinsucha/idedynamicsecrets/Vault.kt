@@ -41,7 +41,7 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
     fun getToken(): String {
         return try {
             if (configuration.tokenHelperPath != "") {
-                getTokenFromHelper(configuration.tokenHelperPath)
+                getTokenFromHelper(configuration.tokenHelperPath, configuration.vaultAddress)
             } else {
                 getTokenFromFile()
             }
@@ -100,8 +100,9 @@ fun getTokenFromFile(): String {
 
 private const val TOKEN_HELPER_TIMEOUT_MILLIS = 1000L
 
-fun getTokenFromHelper(helperPath: String): String {
+fun getTokenFromHelper(helperPath: String, vaultAddress: String): String {
     val cmdLine = GeneralCommandLine(helperPath, "get")
+    cmdLine.environment["VAULT_ADDR"] = vaultAddress
     return ScriptRunnerUtil.getProcessOutput(
         cmdLine,
         ScriptRunnerUtil.STDOUT_OUTPUT_KEY_FILTER,
