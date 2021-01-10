@@ -4,6 +4,8 @@ import com.intellij.execution.ExecutionException
 import com.intellij.execution.configurations.RunConfigurationBase
 import com.intellij.openapi.Disposable
 import com.intellij.openapi.options.SettingsEditor
+import com.intellij.openapi.progress.ProgressIndicator
+import com.intellij.openapi.progress.ProgressIndicatorProvider
 import com.intellij.openapi.progress.ProgressManager
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
@@ -21,6 +23,15 @@ import com.intellij.ui.components.JBList
 import com.intellij.ui.layout.panel
 import com.intellij.ui.table.JBTable
 import com.intellij.util.xmlb.XmlSerializerUtil
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.joinAll
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.supervisorScope
 import org.jdom.Element
 import java.awt.Dimension
 import java.awt.event.MouseEvent
@@ -204,15 +215,19 @@ data class EnvVarsResult(
 fun buildEnvVarsWithProgress(project: Project, envVarConfiguration: EnvVarConfiguration): EnvVarsResult {
     return ProgressManager.getInstance().runProcessWithProgressSynchronously(
         ThrowableComputable<EnvVarsResult, ExecutionException> {
-            buildEnvVars(project, envVarConfiguration)
+            buildEnvVars(project, envVarConfiguration, ProgressIndicatorProvider.getGlobalProgressIndicator()!!)
         },
         "Fetching vault secrets",
-        false,
+        true,
         project,
     )
 }
 
-fun buildEnvVars(project: Project, envVarConfiguration: EnvVarConfiguration): EnvVarsResult {
+fun buildEnvVars(
+    project: Project,
+    envVarConfiguration: EnvVarConfiguration,
+    indicator: ProgressIndicator
+): EnvVarsResult {
     val vault = project.getService(Vault::class.java)
     val token = try {
         vault.getToken()
@@ -223,7 +238,7 @@ fun buildEnvVars(project: Project, envVarConfiguration: EnvVarConfiguration): En
     val leaseDisposable = RunConfigurationLeases(vault, leaseIDs, project)
     Disposer.register(vault, leaseDisposable)
     val envVars = try {
-        fetchEnvVars(vault, token, envVarConfiguration, leaseIDs)
+        fetchEnvVars(vault, token, envVarConfiguration, leaseIDs, indicator)
     } catch (e: VaultException) {
         Disposer.dispose(leaseDisposable)
         throw ExecutionException(e)
@@ -234,31 +249,47 @@ fun buildEnvVars(project: Project, envVarConfiguration: EnvVarConfiguration): En
     )
 }
 
+private const val CANCEL_CHECKER_DELAY_MILLIS = 10L
+
 fun fetchEnvVars(
     vault: Vault,
     token: String,
     envVarConfiguration: EnvVarConfiguration,
     leaseIDs: MutableSet<String>,
-): Map<String, String> {
+    indicator: ProgressIndicator,
+): Map<String, String> = runBlocking {
     val envVars = mutableMapOf<String, String>()
-    for (secretConfiguration in envVarConfiguration.secrets) {
-        val secret = vault.fetchSecret(token, secretConfiguration.path)
-        if (secret.leaseID != "") {
-            leaseIDs.add(secret.leaseID)
-        }
-        for (mapping in secretConfiguration.envVarMapping) {
-            val value = secret.data[mapping.secretValueName]
-            if (value == null) {
-                val keys = secret.data.keys.sorted()
-                throw VaultException(
-                    "Secret ${secretConfiguration.path} does not have key " +
-                        "${mapping.secretValueName}\nThe following keys are available: $keys"
-                )
-            }
-            envVars[mapping.envVarName] = value
+    val cancelChecker = async {
+        while (isActive) {
+            indicator.checkCanceled()
+            delay(CANCEL_CHECKER_DELAY_MILLIS)
         }
     }
-    return envVars
+    val jobs = mutableListOf<Job>()
+    for (secretConfiguration in envVarConfiguration.secrets) {
+        jobs.add(
+            async {
+                val secret = vault.fetchSecret(token, secretConfiguration.path)
+                if (secret.leaseID != "") {
+                    leaseIDs.add(secret.leaseID)
+                }
+                for (mapping in secretConfiguration.envVarMapping) {
+                    val value = secret.data[mapping.secretValueName]
+                    if (value == null) {
+                        val keys = secret.data.keys.sorted()
+                        throw VaultException(
+                            "Secret ${secretConfiguration.path} does not have key " +
+                                "${mapping.secretValueName}\nThe following keys are available: $keys"
+                        )
+                    }
+                    envVars[mapping.envVarName] = value
+                }
+            }
+        )
+    }
+    jobs.joinAll()
+    cancelChecker.cancelAndJoin()
+    envVars
 }
 
 class RunConfigurationLeases(
@@ -273,11 +304,22 @@ class RunConfigurationLeases(
             notifyError(project, "Error revoking leases: ${e.message}")
             return
         }
-        for (leaseID in leaseIDs) {
-            try {
-                vault.revokeLease(token, leaseID)
-            } catch (e: VaultException) {
-                notifyError(project, "Error revoking lease: ${e.message}")
+        runBlocking {
+            // supervisorScope so that we don't cancel revoking all other leases if one revoke fails.
+            supervisorScope {
+                val jobs = mutableListOf<Job>()
+                for (leaseID in leaseIDs) {
+                    jobs.add(
+                        launch {
+                            try {
+                                vault.revokeLease(token, leaseID)
+                            } catch (e: VaultException) {
+                                notifyError(project, "Error revoking lease: ${e.message}")
+                            }
+                        }
+                    )
+                }
+                jobs.joinAll()
             }
         }
     }

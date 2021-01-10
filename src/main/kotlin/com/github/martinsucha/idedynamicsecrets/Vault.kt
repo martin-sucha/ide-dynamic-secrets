@@ -13,9 +13,15 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.layout.panel
 import com.intellij.util.SystemProperties
-import com.intellij.util.concurrency.annotations.RequiresBackgroundThread
-import com.intellij.util.io.HttpRequests
 import com.intellij.util.xmlb.XmlSerializerUtil
+import io.ktor.client.HttpClient
+import io.ktor.client.engine.cio.CIO
+import io.ktor.client.request.get
+import io.ktor.client.request.header
+import io.ktor.client.request.put
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -34,6 +40,8 @@ data class VaultState(
 class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateComponent<VaultState>, Disposable {
     val configuration = VaultState()
 
+    private val httpClient = HttpClient(CIO)
+
     override fun getState() = configuration
     override fun loadState(p: VaultState) {
         XmlSerializerUtil.copyBean(p, configuration)
@@ -46,7 +54,6 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
             } catch (e: ExecutionException) {
                 throw VaultException("Error getting token from helper: ${e.message}", e)
             }
-
         } else {
             try {
                 getTokenFromFile()
@@ -57,44 +64,53 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
         }
     }
 
+    private suspend fun fetchURL(url: String, token: String): String {
+        return httpClient.get(url) {
+            header("X-Vault-Token", token)
+        }
+    }
+
     /**
      * Fetches a vault secret by path.
      * path does not start with slash.
      */
-    fun fetchSecret(token: String, path: String): VaultSecret {
+    suspend fun fetchSecret(token: String, path: String): VaultSecret {
         val jsonData = try {
-            HttpRequests.request(secretURL(configuration.vaultAddress, path))
-                .tuner {
-                    it.setRequestProperty("X-Vault-Token", token)
-                }.readString()
+            httpClient.get<String>(secretURL(configuration.vaultAddress, path)) {
+                header("X-Vault-Token", token)
+            }
         } catch (e: IOException) {
-            throw VaultException("Fetching secret $path from Vault: ${e.message}", e)
+            throw VaultException("Fetching secret $path from Vault: ${e.message}")
         }
         return parseSecret(jsonData)
     }
 
-    @RequiresBackgroundThread
-    fun revokeLease(token: String, leaseID: String) {
+    suspend fun revokeLease(token: String, leaseID: String) {
         // https://www.vaultproject.io/api-docs/system/leases#revoke-lease
-        val url = joinURL(configuration.vaultAddress, "/v1/sys/leases/revoke")
-        val requestData = JsonObject(mapOf("lease_id" to JsonPrimitive(leaseID)))
         try {
-            HttpRequests.put(url, "application/json").tuner {
-                it.setRequestProperty("X-Vault-Token", token)
+            httpClient.put<String>(joinURL(configuration.vaultAddress, "/v1/sys/leases/revoke")) {
+                header("X-Vault-Token", token)
+                header("Content-Type", "application/json")
+                body = JsonObject(mapOf("lease_id" to JsonPrimitive(leaseID))).toString()
             }
-                .connect {
-                    it.write(requestData.toString())
-                    it.readString()
-                }
         } catch (e: IOException) {
             throw VaultException("Revoke lease $leaseID: $e", e)
         }
     }
 
     override fun dispose() {
-        // no-op, Vault disposable is used as parent for other disposables.
+        runBlocking {
+            // Close and wait for 1 seconds.
+            // Should switch to httpClient.join() as in https://ktor.io/docs/client.html#releasing-resources
+            // once I figure out why join is not found by the compiler.
+            httpClient.close()
+            delay(DISPOSE_CANCEL_DELAY_MILLIS)
+            httpClient.cancel()
+        }
     }
 }
+
+private const val DISPOSE_CANCEL_DELAY_MILLIS = 1000L
 
 fun getTokenFromFile(): String {
     val homeDir = SystemProperties.getUserHome()

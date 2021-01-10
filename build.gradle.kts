@@ -49,6 +49,8 @@ dependencies {
     detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.15.0")
     implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.0.1")
     implementation("org.jetbrains.kotlin:kotlin-reflect:1.4.21")
+    implementation("io.ktor:ktor-client-cio:1.5.0")
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.4.2")
 }
 
 // Configure gradle-intellij-plugin plugin.

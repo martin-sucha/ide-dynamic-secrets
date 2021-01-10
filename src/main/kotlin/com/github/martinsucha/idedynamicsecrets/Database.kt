@@ -15,6 +15,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.layout.panel
+import kotlinx.coroutines.runBlocking
 import java.util.LinkedList
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
@@ -48,7 +49,9 @@ class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
             val vault = proto.runConfiguration.project.getService(Vault::class.java)
             val token = vault.getToken()
 
-            val secret = vault.fetchSecret(token, path)
+            val secret = runBlocking {
+                vault.fetchSecret(token, path)
+            }
             val lease = DatabaseLease(vault, secret.leaseID, proto.runConfiguration.project)
             Disposer.register(vault, lease)
 
@@ -164,7 +167,9 @@ class DatabaseLease(private val vault: Vault, private val leaseID: String, priva
         val runnable = Runnable {
             try {
                 val token = vault.getToken()
-                vault.revokeLease(token, leaseID)
+                runBlocking {
+                    vault.revokeLease(token, leaseID)
+                }
             } catch (e: VaultException) {
                 notifyError(project, "Error revoking lease: ${e.message}")
             }
