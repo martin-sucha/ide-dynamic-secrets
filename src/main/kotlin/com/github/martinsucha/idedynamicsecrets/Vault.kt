@@ -67,8 +67,11 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
             try {
                 getTokenFromFile()
             } catch (e: IOException) {
-                throw VaultException("Error getting token from cli file: ${e.message}\n" +
-                        "Use `vault login` to create it or configure token helper.", e)
+                throw VaultException(
+                    "Error getting token from cli file: ${e.message}\n" +
+                        "Use `vault login` to create it or configure token helper.",
+                    e
+                )
             }
         }
     }

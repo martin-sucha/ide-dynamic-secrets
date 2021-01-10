@@ -304,7 +304,7 @@ private suspend fun fetchEnvVarsForSingleSecret(
             val keys = secret.data.keys.sorted()
             throw VaultException(
                 "Secret ${secretConfiguration.path} does not have key " +
-                        "${mapping.secretValueName}\nThe following keys are available: $keys"
+                    "${mapping.secretValueName}\nThe following keys are available: $keys"
             )
         }
         envVars[mapping.envVarName] = value
