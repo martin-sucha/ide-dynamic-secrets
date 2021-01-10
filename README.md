@@ -1,33 +1,32 @@
 # ide-dynamic-secrets
 
 ![Build](https://github.com/martin-sucha/ide-dynamic-secrets/workflows/Build/badge.svg)
+<!-- hide badges as plugin is not on marketplace yet
 [![Version](https://img.shields.io/jetbrains/plugin/v/PLUGIN_ID.svg)](https://plugins.jetbrains.com/plugin/PLUGIN_ID)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/PLUGIN_ID.svg)](https://plugins.jetbrains.com/plugin/PLUGIN_ID)
-
-## Template ToDo list
-- [x] Create a new [IntelliJ Platform Plugin Template][template] project.
-- [ ] Verify the [pluginGroup](/gradle.properties), [plugin ID](/src/main/resources/META-INF/plugin.xml) and [sources package](/src/main/kotlin).
-- [ ] Review the [Legal Agreements](https://plugins.jetbrains.com/docs/marketplace/legal-agreements.html).
-- [ ] [Publish a plugin manually](https://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/publishing_plugin.html) for the first time.
-- [ ] Set the Plugin ID in the above README badges.
-- [ ] Set the [Deployment Token](https://plugins.jetbrains.com/docs/marketplace/plugin-upload.html).
-- [ ] Click the <kbd>Watch</kbd> button on the top of the [IntelliJ Platform Plugin Template][template] to be notified about releases containing new features and fixes.
+-->
 
 <!-- Plugin description -->
-This Fancy IntelliJ Platform Plugin is going to be your implementation of the brilliant ideas that you have.
+IDE Dynamic Secrets plugin allows using secrets stored in Hashicorp Vault from within IntelliJ Platform based IDEs:
 
-This specific section is a source for the [plugin.xml](/src/main/resources/META-INF/plugin.xml) file which will be extracted by the [Gradle](/build.gradle.kts) during the build process.
+Expose secrets as environment variables when running your programs and revoke those secrets when the program finishes.
 
-To keep everything working, do not remove `<!-- ... -->` sections. 
+Supported run configurations:
+
+* Go
+* Python
+
+Use secrets when connecting to databases in database tools.
 <!-- Plugin description end -->
 
 ## Installation
 
+<!-- not available on marketplace yet
 - Using IDE built-in plugin system:
   
-  <kbd>Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>Marketplace</kbd> > <kbd>Search for "ide-dynamic-secrets"</kbd> >
+  <kbd>Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>Marketplace</kbd> > <kbd>Search for "IDE Dynamic Secrets"</kbd> >
   <kbd>Install Plugin</kbd>
-  
+  -->
 - Manually:
 
   Download the [latest release](https://github.com/martin-sucha/ide-dynamic-secrets/releases/latest) and install it manually using
