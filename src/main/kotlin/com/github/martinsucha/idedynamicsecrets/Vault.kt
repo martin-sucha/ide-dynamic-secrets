@@ -13,6 +13,7 @@ import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
 import com.intellij.ui.layout.panel
 import com.intellij.util.SystemProperties
+import com.intellij.util.net.ssl.CertificateManager
 import com.intellij.util.xmlb.XmlSerializerUtil
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
@@ -28,6 +29,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import java.io.IOException
 import java.net.URI
 import java.nio.file.Paths
+import java.security.GeneralSecurityException
+import java.security.cert.CertPathBuilderException
 
 data class VaultState(
     var vaultAddress: String = "",
@@ -40,7 +43,13 @@ data class VaultState(
 class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateComponent<VaultState>, Disposable {
     val configuration = VaultState()
 
-    private val httpClient = HttpClient(CIO)
+    private val httpClient = HttpClient(CIO) {
+        engine {
+            https {
+                trustManager = CertificateManager.getInstance().trustManager
+            }
+        }
+    }
 
     override fun getState() = configuration
     override fun loadState(p: VaultState) {
@@ -64,10 +73,14 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
         }
     }
 
-    private suspend fun fetchURL(url: String, token: String): String {
-        return httpClient.get(url) {
-            header("X-Vault-Token", token)
-        }
+    private suspend fun <T> wrapClientException(message: String, block: suspend () -> T): T = try {
+        block()
+    } catch (e: IOException) {
+        throw VaultException("$message: ${e.message}")
+    } catch (e: CertPathBuilderException) {
+        throw VaultException("Vault's TLS certificate check failed: ${e.message}")
+    } catch (e: GeneralSecurityException) {
+        throw VaultException("$message: ${e.message}")
     }
 
     /**
@@ -75,26 +88,22 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
      * path does not start with slash.
      */
     suspend fun fetchSecret(token: String, path: String): VaultSecret {
-        val jsonData = try {
+        val jsonData = wrapClientException("Fetch secret $path from Vault") {
             httpClient.get<String>(secretURL(configuration.vaultAddress, path)) {
                 header("X-Vault-Token", token)
             }
-        } catch (e: IOException) {
-            throw VaultException("Fetching secret $path from Vault: ${e.message}")
         }
         return parseSecret(jsonData)
     }
 
     suspend fun revokeLease(token: String, leaseID: String) {
         // https://www.vaultproject.io/api-docs/system/leases#revoke-lease
-        try {
+        wrapClientException("Revoke lease $leaseID") {
             httpClient.put<String>(joinURL(configuration.vaultAddress, "/v1/sys/leases/revoke")) {
                 header("X-Vault-Token", token)
                 header("Content-Type", "application/json")
                 body = JsonObject(mapOf("lease_id" to JsonPrimitive(leaseID))).toString()
             }
-        } catch (e: IOException) {
-            throw VaultException("Revoke lease $leaseID: $e", e)
         }
     }
 

@@ -257,39 +257,58 @@ fun fetchEnvVars(
     envVarConfiguration: EnvVarConfiguration,
     leaseIDs: MutableSet<String>,
     indicator: ProgressIndicator,
-): Map<String, String> = runBlocking {
-    val envVars = mutableMapOf<String, String>()
-    val cancelChecker = async {
-        while (isActive) {
-            indicator.checkCanceled()
-            delay(CANCEL_CHECKER_DELAY_MILLIS)
-        }
+): Map<String, String> {
+    if (envVarConfiguration.secrets.isEmpty()) {
+        return mapOf()
     }
-    val jobs = mutableListOf<Job>()
-    for (secretConfiguration in envVarConfiguration.secrets) {
-        jobs.add(
-            async {
-                val secret = vault.fetchSecret(token, secretConfiguration.path)
-                if (secret.leaseID != "") {
-                    leaseIDs.add(secret.leaseID)
-                }
-                for (mapping in secretConfiguration.envVarMapping) {
-                    val value = secret.data[mapping.secretValueName]
-                    if (value == null) {
-                        val keys = secret.data.keys.sorted()
-                        throw VaultException(
-                            "Secret ${secretConfiguration.path} does not have key " +
-                                "${mapping.secretValueName}\nThe following keys are available: $keys"
-                        )
-                    }
-                    envVars[mapping.envVarName] = value
-                }
+    return runBlocking {
+        val envVars = mutableMapOf<String, String>()
+        val cancelChecker = async {
+            while (isActive) {
+                indicator.checkCanceled()
+                delay(CANCEL_CHECKER_DELAY_MILLIS)
             }
-        )
+        }
+        // We fetch first secret synchronously so that when the Vault's server certificate is not trusted and
+        // the user rejects the certificate, we don't show the dialog multiple times.
+        val firstSecret = envVarConfiguration.secrets.first()
+        fetchEnvVarsForSingleSecret(vault, token, firstSecret, leaseIDs, envVars)
+        val jobs = mutableListOf<Job>()
+        for (secretConfiguration in envVarConfiguration.secrets.subList(1, envVarConfiguration.secrets.size)) {
+            jobs.add(
+                async {
+                    fetchEnvVarsForSingleSecret(vault, token, secretConfiguration, leaseIDs, envVars)
+                }
+            )
+        }
+        jobs.joinAll()
+        cancelChecker.cancelAndJoin()
+        envVars
     }
-    jobs.joinAll()
-    cancelChecker.cancelAndJoin()
-    envVars
+}
+
+private suspend fun fetchEnvVarsForSingleSecret(
+    vault: Vault,
+    token: String,
+    secretConfiguration: EnvVarSecret,
+    leaseIDs: MutableSet<String>,
+    envVars: MutableMap<String, String>
+) {
+    val secret = vault.fetchSecret(token, secretConfiguration.path)
+    if (secret.leaseID != "") {
+        leaseIDs.add(secret.leaseID)
+    }
+    for (mapping in secretConfiguration.envVarMapping) {
+        val value = secret.data[mapping.secretValueName]
+        if (value == null) {
+            val keys = secret.data.keys.sorted()
+            throw VaultException(
+                "Secret ${secretConfiguration.path} does not have key " +
+                        "${mapping.secretValueName}\nThe following keys are available: $keys"
+            )
+        }
+        envVars[mapping.envVarName] = value
+    }
 }
 
 class RunConfigurationLeases(
