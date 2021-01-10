@@ -111,6 +111,9 @@ class EditEnvVarSecretDialog(secret: EnvVarSecret) : DialogWrapper(true) {
         row {
             scrollPane(varsTable(secret))
         }
+    }.let {
+        it.minimumSize = Dimension(400, 300)
+        it
     }
 
     private fun varsTable(secret: EnvVarSecret): JComponent {
