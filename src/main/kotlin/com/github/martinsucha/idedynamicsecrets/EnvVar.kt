@@ -112,6 +112,7 @@ class EditEnvVarSecretDialog(secret: EnvVarSecret) : DialogWrapper(true) {
             scrollPane(varsTable(secret))
         }
     }.let {
+        @Suppress("MagicNumber")
         it.minimumSize = Dimension(400, 300)
         it
     }
