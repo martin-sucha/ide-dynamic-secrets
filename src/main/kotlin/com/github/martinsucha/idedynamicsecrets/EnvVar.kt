@@ -150,13 +150,13 @@ data class EnvVarSecret(
     }
 
     fun cleanup() {
-        envVarMapping.removeIf { it.envVarName == "" || it.secretValueName == "" }
+        envVarMapping.removeIf { it.envVarName == "" || it.keyInSecret == "" }
     }
 }
 
 data class EnvVarSecretMapping(
     var envVarName: String = "",
-    var secretValueName: String = "",
+    var keyInSecret: String = "",
 )
 
 class EnvVarListCellRenderer : ColoredListCellRenderer<EnvVarSecret>() {
@@ -186,7 +186,7 @@ class EnvVarTableModel(private val secret: EnvVarSecret) : AbstractTableModel() 
         val mapping = secret.envVarMapping[rowIndex]
         return when (columnIndex) {
             0 -> mapping.envVarName
-            1 -> mapping.secretValueName
+            1 -> mapping.keyInSecret
             else -> throw IndexOutOfBoundsException("Invalid column index $columnIndex")
         }
     }
@@ -194,7 +194,7 @@ class EnvVarTableModel(private val secret: EnvVarSecret) : AbstractTableModel() 
     override fun getColumnName(column: Int): String {
         return when (column) {
             0 -> "Env var name"
-            1 -> "Secret value key"
+            1 -> "Key from secret"
             else -> throw IndexOutOfBoundsException("Invalid column index $column")
         }
     }
@@ -205,7 +205,7 @@ class EnvVarTableModel(private val secret: EnvVarSecret) : AbstractTableModel() 
         val mapping = secret.envVarMapping[rowIndex]
         when (columnIndex) {
             0 -> mapping.envVarName = aValue as String
-            1 -> mapping.secretValueName = aValue as String
+            1 -> mapping.keyInSecret = aValue as String
             else -> throw IndexOutOfBoundsException("Invalid column index $columnIndex")
         }
     }
@@ -303,12 +303,12 @@ private suspend fun fetchEnvVarsForSingleSecret(
         leaseIDs.add(secret.leaseID)
     }
     for (mapping in secretConfiguration.envVarMapping) {
-        val value = secret.data[mapping.secretValueName]
+        val value = secret.data[mapping.keyInSecret]
         if (value == null) {
             val keys = secret.data.keys.sorted()
             throw VaultException(
                 "Secret ${secretConfiguration.path} does not have key " +
-                    "${mapping.secretValueName}\nThe following keys are available: $keys"
+                    "${mapping.keyInSecret}\nThe following keys are available: $keys"
             )
         }
         envVars[mapping.envVarName] = value
@@ -362,11 +362,11 @@ fun parseSecretElement(secretElement: Element): EnvVarSecret {
         if (envVarName == null) {
             throw ConfigurationException("secret.envVar.name is not present")
         }
-        val secretValueName = envVarElement.getAttributeValue(ATTR_ENV_VAR_SECRET_VALUE_NAME)
-        if (secretValueName == null) {
+        val keyInSecret = envVarElement.getAttributeValue(ATTR_ENV_VAR_KEY_IN_SECRET)
+        if (keyInSecret == null) {
             throw ConfigurationException("secret.envVar.secretValueName is not present")
         }
-        mappings.add(EnvVarSecretMapping(envVarName, secretValueName))
+        mappings.add(EnvVarSecretMapping(envVarName, keyInSecret))
     }
     return EnvVarSecret(
         path = path,
@@ -380,7 +380,7 @@ private const val ELEMENT_SECRETS_ITEM = "secret"
 private const val ELEMENT_SECRETS_ENV_VAR = "envVar"
 private const val ATTR_PATH = "path"
 private const val ATTR_ENV_VAR_NAME = "name"
-private const val ATTR_ENV_VAR_SECRET_VALUE_NAME = "secretValueName"
+private const val ATTR_ENV_VAR_KEY_IN_SECRET = "secretValueName"
 
 internal val EDITOR_KEY = Key<EnvVarConfiguration>("Dynamic Secrets settings")
 
@@ -462,7 +462,7 @@ fun writeEnvVarConfigurationToElement(state: EnvVarConfiguration, element: Eleme
         for (envVar in secret.envVarMapping) {
             val envVarElement = Element(ELEMENT_SECRETS_ENV_VAR)
             envVarElement.setAttribute(ATTR_ENV_VAR_NAME, envVar.envVarName)
-            envVarElement.setAttribute(ATTR_ENV_VAR_SECRET_VALUE_NAME, envVar.secretValueName)
+            envVarElement.setAttribute(ATTR_ENV_VAR_KEY_IN_SECRET, envVar.keyInSecret)
             secretElement.addContent(envVarElement)
         }
         secretsElement.addContent(secretElement)
