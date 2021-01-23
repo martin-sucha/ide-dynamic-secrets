@@ -123,7 +123,9 @@ tasks {
     }
 
     runIde {
-        ideDirectory(runIdeDirectory)
+        if (runIdeDirectory != null) {
+            ideDirectory(runIdeDirectory)
+        }
     }
 
     runPluginVerifier {
