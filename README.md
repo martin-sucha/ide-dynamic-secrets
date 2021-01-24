@@ -33,6 +33,11 @@ Use secrets when connecting to databases in database tools.
   <kbd>Preferences</kbd> > <kbd>Plugins</kbd> > <kbd>⚙️</kbd> > <kbd>Install plugin from disk...</kbd>
 
 
+## License
+
+Unless expressly stated otherwise, all files in this repository are licensed under the Apache License, version 2.0
+(see LICENSE.txt).
+
 ---
 Plugin based on the [IntelliJ Platform Plugin Template][template].
 
