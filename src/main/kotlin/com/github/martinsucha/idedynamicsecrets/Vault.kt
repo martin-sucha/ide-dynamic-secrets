@@ -11,6 +11,9 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
+import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.ui.components.JBTextField
+import com.intellij.ui.layout.ValidationInfoBuilder
 import com.intellij.ui.layout.panel
 import com.intellij.util.SystemProperties
 import com.intellij.util.net.ssl.CertificateManager
@@ -20,6 +23,9 @@ import io.ktor.client.engine.cio.CIO
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.put
+import io.ktor.http.URLParserException
+import io.ktor.http.URLProtocol
+import io.ktor.http.Url
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -235,7 +241,18 @@ class VaultConfigurable(private val project: Project) : BoundConfigurable("Dynam
     override fun createPanel(): DialogPanel = panel {
         row {
             label("Vault address:")
-            textField(vault.configuration::vaultAddress)
+            textField(vault.configuration::vaultAddress).withValidationOnInput {
+                try {
+                    val url = Url(it.text)
+                    if (!(url.protocol == URLProtocol.HTTP || url.protocol == URLProtocol.HTTPS)) {
+                        error("Only http or https protocols are supported")
+                    } else {
+                        null
+                    }
+                } catch (e: URLParserException) {
+                    error("Must be valid URL")
+                }
+            }
         }
         row {
             label("Token helper:")
