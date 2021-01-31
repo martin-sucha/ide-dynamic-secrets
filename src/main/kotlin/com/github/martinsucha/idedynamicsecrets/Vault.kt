@@ -11,9 +11,9 @@ import com.intellij.openapi.fileChooser.FileChooserDescriptor
 import com.intellij.openapi.options.BoundConfigurable
 import com.intellij.openapi.project.Project
 import com.intellij.openapi.ui.DialogPanel
-import com.intellij.openapi.ui.ValidationInfo
+import com.intellij.openapi.ui.TextFieldWithBrowseButton
+import com.intellij.ui.components.JBLabel
 import com.intellij.ui.components.JBTextField
-import com.intellij.ui.layout.ValidationInfoBuilder
 import com.intellij.ui.layout.panel
 import com.intellij.util.SystemProperties
 import com.intellij.util.net.ssl.CertificateManager
@@ -27,12 +27,11 @@ import io.ktor.client.request.put
 import io.ktor.http.URLParserException
 import io.ktor.http.URLProtocol
 import io.ktor.http.Url
-import kotlinx.coroutines.cancel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
+import java.io.Closeable
 import java.io.IOException
 import java.net.URI
 import java.nio.file.Paths
@@ -50,35 +49,25 @@ data class VaultState(
 class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateComponent<VaultState>, Disposable {
     val configuration = VaultState()
 
-    private val httpClient = HttpClient(CIO) {
-        engine {
-            https {
-                trustManager = CertificateManager.getInstance().trustManager
-            }
-        }
-    }
-
     override fun getState() = configuration
     override fun loadState(p: VaultState) {
         XmlSerializerUtil.copyBean(p, configuration)
     }
 
-    fun getToken(): String {
-        return if (configuration.tokenHelperPath != "") {
-            try {
-                getTokenFromHelper(configuration.tokenHelperPath, configuration.vaultAddress)
-            } catch (e: ExecutionException) {
-                throw VaultException("Error getting token from helper: ${e.message}", e)
-            }
-        } else {
-            try {
-                getTokenFromFile()
-            } catch (e: IOException) {
-                throw VaultException(
-                    "Error getting token from cli file: ${e.message}\n" +
-                        "Use `vault login` to create it or configure token helper.",
-                    e
-                )
+    fun getClient() = VaultClient(configuration)
+
+    fun getToken(): String = getToken(configuration)
+
+    override fun dispose() {
+        // No-op. Vault is used as parent disposable.
+    }
+}
+
+class VaultClient(private val configuration: VaultState) : Closeable {
+    private val httpClient = HttpClient(CIO) {
+        engine {
+            https {
+                trustManager = CertificateManager.getInstance().trustManager
             }
         }
     }
@@ -119,19 +108,18 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
         }
     }
 
-    override fun dispose() {
-        runBlocking {
-            // Close and wait for 1 seconds.
-            // Should switch to httpClient.join() as in https://ktor.io/docs/client.html#releasing-resources
-            // once I figure out why join is not found by the compiler.
-            httpClient.close()
-            delay(DISPOSE_CANCEL_DELAY_MILLIS)
-            httpClient.cancel()
+    suspend fun lookupSelf(token: String) {
+        wrapClientException("Lookup information about token") {
+            httpClient.get<String>(joinURL(configuration.vaultAddress, "/v1/auth/token/lookup-self")) {
+                header("X-Vault-Token", token)
+            }
         }
     }
-}
 
-private const val DISPOSE_CANCEL_DELAY_MILLIS = 1000L
+    override fun close() {
+        httpClient.close()
+    }
+}
 
 fun getTokenFromFile(): String {
     val homeDir = SystemProperties.getUserHome()
@@ -156,6 +144,26 @@ fun getTokenFromHelper(helperPath: String, vaultAddress: String): String {
         throw ExecutionException("Token helper returned non-zero exit code $exitCode")
     }
     return token
+}
+
+fun getToken(configuration: VaultState): String {
+    return if (configuration.tokenHelperPath != "") {
+        try {
+            getTokenFromHelper(configuration.tokenHelperPath, configuration.vaultAddress)
+        } catch (e: ExecutionException) {
+            throw VaultException("Error getting token from helper: ${e.message}", e)
+        }
+    } else {
+        try {
+            getTokenFromFile()
+        } catch (e: IOException) {
+            throw VaultException(
+                "Error getting token from cli file: ${e.message}\n" +
+                    "Use `vault login` to create it or configure token helper.",
+                e
+            )
+        }
+    }
 }
 
 fun secretURL(vaultURL: String, secretPath: String): String = joinURL(vaultURL, "/v1/$secretPath")
@@ -241,37 +249,65 @@ class VaultConfigurable(private val project: Project) : BoundConfigurable("Dynam
 
     private val vault = project.getService(Vault::class.java)
 
-    override fun createPanel(): DialogPanel = panel {
-        row {
-            label("Vault address:")
-            textField(vault.configuration::vaultAddress).withValidationOnInput {
-                try {
-                    val url = Url(it.text)
-                    if (!(url.protocol == URLProtocol.HTTP || url.protocol == URLProtocol.HTTPS)) {
-                        error("Only http or https protocols are supported")
-                    } else {
-                        null
+    @Suppress("LongMethod")
+    override fun createPanel(): DialogPanel {
+        val connectionTestResult = JBLabel().setAllowAutoWrapping(true)
+        var address: JBTextField? = null
+        var tokenHelperPath: TextFieldWithBrowseButton? = null
+        return panel {
+            row {
+                label("Vault address:")
+                address = textField(vault.configuration::vaultAddress).withValidationOnInput {
+                    try {
+                        val url = Url(it.text)
+                        if (!(url.protocol == URLProtocol.HTTP || url.protocol == URLProtocol.HTTPS)) {
+                            error("Only http or https protocols are supported")
+                        } else {
+                            null
+                        }
+                    } catch (e: URLParserException) {
+                        error("Must be valid URL")
                     }
-                } catch (e: URLParserException) {
-                    error("Must be valid URL")
+                }.component
+            }
+            row {
+                label("Token helper:")
+                tokenHelperPath = textFieldWithBrowseButton(
+                    vault.configuration::tokenHelperPath,
+                    browseDialogTitle = "Choose token helper program",
+                    project = project,
+                    fileChooserDescriptor = FileChooserDescriptor(
+                        true,
+                        false,
+                        false,
+                        false,
+                        false,
+                        false
+                    )
+                ).component
+            }
+            row {
+                button("Test connection") {
+                    val tempConfig = VaultState(
+                        vaultAddress = address!!.text,
+                        tokenHelperPath = tokenHelperPath!!.text
+                    )
+                    try {
+                        val token = getToken(tempConfig)
+                        VaultClient(tempConfig).use {
+                            runBlocking {
+                                it.lookupSelf(token)
+                            }
+                        }
+                        connectionTestResult.text = "Success!"
+                    } catch (e: VaultException) {
+                        connectionTestResult.text = e.message
+                    }
                 }
             }
-        }
-        row {
-            label("Token helper:")
-            textFieldWithBrowseButton(
-                vault.configuration::tokenHelperPath,
-                browseDialogTitle = "Choose token helper program",
-                project = project,
-                fileChooserDescriptor = FileChooserDescriptor(
-                    true,
-                    false,
-                    false,
-                    false,
-                    false,
-                    false
-                )
-            )
+            row {
+                connectionTestResult()
+            }
         }
     }
 }

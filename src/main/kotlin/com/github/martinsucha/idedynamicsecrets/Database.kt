@@ -49,8 +49,10 @@ class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
             val vault = proto.runConfiguration.project.getService(Vault::class.java)
             val token = vault.getToken()
 
-            val secret = runBlocking {
-                vault.fetchSecret(token, path)
+            val secret = vault.getClient().use {
+                runBlocking {
+                    it.fetchSecret(token, path)
+                }
             }
             val lease = DatabaseLease(vault, secret.leaseID, proto.runConfiguration.project)
             Disposer.register(vault, lease)
@@ -167,8 +169,10 @@ class DatabaseLease(private val vault: Vault, private val leaseID: String, priva
         val runnable = Runnable {
             try {
                 val token = vault.getToken()
-                runBlocking {
-                    vault.revokeLease(token, leaseID)
+                vault.getClient().use {
+                    runBlocking {
+                        it.revokeLease(token, leaseID)
+                    }
                 }
             } catch (e: VaultException) {
                 notifyError(project, "Error revoking lease: ${e.message}")

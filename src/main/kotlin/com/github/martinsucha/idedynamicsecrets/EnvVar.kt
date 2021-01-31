@@ -241,11 +241,13 @@ fun buildEnvVars(
     val leaseIDs = mutableSetOf<String>()
     val leaseDisposable = RunConfigurationLeases(vault, leaseIDs, project)
     Disposer.register(vault, leaseDisposable)
-    val envVars = try {
-        fetchEnvVars(vault, token, envVarConfiguration, leaseIDs, indicator)
-    } catch (e: VaultException) {
-        Disposer.dispose(leaseDisposable)
-        throw ExecutionException(e)
+    val envVars = vault.getClient().use {
+        try {
+            fetchEnvVars(it, token, envVarConfiguration, leaseIDs, indicator)
+        } catch (e: VaultException) {
+            Disposer.dispose(leaseDisposable)
+            throw ExecutionException(e)
+        }
     }
     return EnvVarsResult(
         vars = envVars,
@@ -256,7 +258,7 @@ fun buildEnvVars(
 private const val CANCEL_CHECKER_DELAY_MILLIS = 10L
 
 fun fetchEnvVars(
-    vault: Vault,
+    client: VaultClient,
     token: String,
     envVarConfiguration: EnvVarConfiguration,
     leaseIDs: MutableSet<String>,
@@ -276,12 +278,12 @@ fun fetchEnvVars(
         // We fetch first secret synchronously so that when the Vault's server certificate is not trusted and
         // the user rejects the certificate, we don't show the dialog multiple times.
         val firstSecret = envVarConfiguration.secrets.first()
-        fetchEnvVarsForSingleSecret(vault, token, firstSecret, leaseIDs, envVars)
+        fetchEnvVarsForSingleSecret(client, token, firstSecret, leaseIDs, envVars)
         val jobs = mutableListOf<Job>()
         for (secretConfiguration in envVarConfiguration.secrets.subList(1, envVarConfiguration.secrets.size)) {
             jobs.add(
                 async {
-                    fetchEnvVarsForSingleSecret(vault, token, secretConfiguration, leaseIDs, envVars)
+                    fetchEnvVarsForSingleSecret(client, token, secretConfiguration, leaseIDs, envVars)
                 }
             )
         }
@@ -292,13 +294,13 @@ fun fetchEnvVars(
 }
 
 private suspend fun fetchEnvVarsForSingleSecret(
-    vault: Vault,
+    client: VaultClient,
     token: String,
     secretConfiguration: EnvVarSecret,
     leaseIDs: MutableSet<String>,
     envVars: MutableMap<String, String>
 ) {
-    val secret = vault.fetchSecret(token, secretConfiguration.path)
+    val secret = client.fetchSecret(token, secretConfiguration.path)
     if (secret.leaseID != "") {
         leaseIDs.add(secret.leaseID)
     }
@@ -327,22 +329,24 @@ class RunConfigurationLeases(
             notifyError(project, "Error revoking leases: ${e.message}")
             return
         }
-        runBlocking {
-            // supervisorScope so that we don't cancel revoking all other leases if one revoke fails.
-            supervisorScope {
-                val jobs = mutableListOf<Job>()
-                for (leaseID in leaseIDs) {
-                    jobs.add(
-                        launch {
-                            try {
-                                vault.revokeLease(token, leaseID)
-                            } catch (e: VaultException) {
-                                notifyError(project, "Error revoking lease: ${e.message}")
+        vault.getClient().use { client ->
+            runBlocking {
+                // supervisorScope so that we don't cancel revoking all other leases if one revoke fails.
+                supervisorScope {
+                    val jobs = mutableListOf<Job>()
+                    for (leaseID in leaseIDs) {
+                        jobs.add(
+                            launch {
+                                try {
+                                    client.revokeLease(token, leaseID)
+                                } catch (e: VaultException) {
+                                    notifyError(project, "Error revoking lease: ${e.message}")
+                                }
                             }
-                        }
-                    )
+                        )
+                    }
+                    jobs.joinAll()
                 }
-                jobs.joinAll()
             }
         }
     }
