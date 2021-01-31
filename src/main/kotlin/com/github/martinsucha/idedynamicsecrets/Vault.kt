@@ -20,6 +20,7 @@ import com.intellij.util.net.ssl.CertificateManager
 import com.intellij.util.xmlb.XmlSerializerUtil
 import io.ktor.client.HttpClient
 import io.ktor.client.engine.cio.CIO
+import io.ktor.client.features.ResponseException
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.request.put
@@ -89,6 +90,8 @@ class Vault(@Suppress("UNUSED_PARAMETER") project: Project) : PersistentStateCom
     } catch (e: CertPathBuilderException) {
         throw VaultException("Vault's TLS certificate check failed: ${e.message}")
     } catch (e: GeneralSecurityException) {
+        throw VaultException("$message: ${e.message}")
+    } catch (e: ResponseException) {
         throw VaultException("$message: ${e.message}")
     }
 
