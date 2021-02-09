@@ -109,10 +109,10 @@ class DynamicSecretsAuthWidget : DatabaseAuthProvider.AuthWidget {
         row("Secret path:") {
             textField(configuration::path).focused()
         }
-        row("Username secret value:") {
+        row("Username key:") {
             textField(configuration::usernameKey)
         }
-        row("Password secret value:") {
+        row("Password key:") {
             textField(configuration::passwordKey)
         }
     }
