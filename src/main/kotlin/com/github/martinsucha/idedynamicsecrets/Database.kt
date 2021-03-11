@@ -33,15 +33,15 @@ class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
         silent: Boolean
     ): CompletionStage<DatabaseConnectionInterceptor.ProtoConnection>? {
         return CompletableFuture.supplyAsync {
-            val path = proto.connectionPoint.additionalJdbcProperties[DATABASE_PATH_PROPERTY]
+            val path = proto.connectionPoint.additionalProperties[DATABASE_PATH_PROPERTY]
             if (path == null || path == "") {
                 throw ConfigurationException("vault path is not specified")
             }
-            val usernameKey = proto.connectionPoint.additionalJdbcProperties[DATABASE_USERNAME_KEY_PROPERTY]
+            val usernameKey = proto.connectionPoint.additionalProperties[DATABASE_USERNAME_KEY_PROPERTY]
             if (usernameKey == null || usernameKey == "") {
                 throw ConfigurationException("vault username key is not specified")
             }
-            val passwordKey = proto.connectionPoint.additionalJdbcProperties[DATABASE_PASSWORD_KEY_PROPERTY]
+            val passwordKey = proto.connectionPoint.additionalProperties[DATABASE_PASSWORD_KEY_PROPERTY]
             if (passwordKey == null || passwordKey == "") {
                 throw ConfigurationException("vault password key is not specified")
             }
@@ -92,6 +92,14 @@ class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
     ): DatabaseAuthProvider.AuthWidget {
         return DynamicSecretsAuthWidget()
     }
+
+    override fun handleConnected(
+        connection: DatabaseConnection,
+        proto: DatabaseConnectionInterceptor.ProtoConnection
+    ): CompletionStage<*>? {
+        // TODO: track proto→connection so that listener can handle the correct connection.
+        return null
+    }
 }
 
 data class DatabaseSecretConfiguration(
@@ -123,15 +131,15 @@ class DynamicSecretsAuthWidget : DatabaseAuthProvider.AuthWidget {
 
     override fun save(dataSource: LocalDataSource, copyCredentials: Boolean) {
         panel.apply()
-        dataSource.additionalJdbcProperties[DATABASE_PATH_PROPERTY] = configuration.path
-        dataSource.additionalJdbcProperties[DATABASE_USERNAME_KEY_PROPERTY] = configuration.usernameKey
-        dataSource.additionalJdbcProperties[DATABASE_PASSWORD_KEY_PROPERTY] = configuration.passwordKey
+        dataSource.additionalProperties[DATABASE_PATH_PROPERTY] = configuration.path
+        dataSource.additionalProperties[DATABASE_USERNAME_KEY_PROPERTY] = configuration.usernameKey
+        dataSource.additionalProperties[DATABASE_PASSWORD_KEY_PROPERTY] = configuration.passwordKey
     }
 
     override fun reset(dataSource: LocalDataSource, resetCredentials: Boolean) {
-        configuration.path = dataSource.additionalJdbcProperties[DATABASE_PATH_PROPERTY] ?: ""
-        configuration.usernameKey = dataSource.additionalJdbcProperties[DATABASE_USERNAME_KEY_PROPERTY] ?: "username"
-        configuration.passwordKey = dataSource.additionalJdbcProperties[DATABASE_PASSWORD_KEY_PROPERTY] ?: "password"
+        configuration.path = dataSource.additionalProperties[DATABASE_PATH_PROPERTY] ?: ""
+        configuration.usernameKey = dataSource.additionalProperties[DATABASE_USERNAME_KEY_PROPERTY] ?: "username"
+        configuration.passwordKey = dataSource.additionalProperties[DATABASE_PASSWORD_KEY_PROPERTY] ?: "password"
         panel.reset()
     }
 
