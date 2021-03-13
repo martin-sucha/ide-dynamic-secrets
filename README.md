@@ -9,14 +9,16 @@
 <!-- Plugin description -->
 IDE Dynamic Secrets plugin allows using secrets stored in Hashicorp Vault from within IntelliJ Platform based IDEs:
 
-Expose secrets as environment variables when running your programs and revoke those secrets when the program finishes.
+* Use secrets when connecting to databases in database tools and revoke lease when connection is disconnected.
+  The plugin adds "Dynamic Secrets" authentication type to data source properties.
+* Expose secrets as environment variables when running your programs and revoke those secrets when the program finishes.
+  The plugin adds "Dynamic Secrets" tab to Run/Debug configurations.
 
-Supported run configurations:
+  Supported run configurations:
 
-* Go
-* Python
+  * Go
+  * Python
 
-Use secrets when connecting to databases in database tools.
 <!-- Plugin description end -->
 
 ## Installation
