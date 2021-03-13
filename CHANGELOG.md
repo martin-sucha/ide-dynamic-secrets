@@ -5,13 +5,19 @@
 ## [Unreleased]
 ### Added
 
+* Support for platform version `2021.1`.
+
 ### Changed
 
 ### Deprecated
 
 ### Removed
 
+* Support for platform version `<2021.1`.
+
 ### Fixed
+
+* Fixed race condition when assigning leases to database connections. 
 
 ### Security
 ## [0.0.1]
