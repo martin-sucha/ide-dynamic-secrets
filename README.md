@@ -1,6 +1,6 @@
 # ide-dynamic-secrets
 
-![Build](https://github.com/martin-sucha/ide-dynamic-secrets/workflows/Build/badge.svg)
+[![Build](https://github.com/martin-sucha/ide-dynamic-secrets/workflows/Build/badge.svg)](https://github.com/martin-sucha/ide-dynamic-secrets/actions)
 <!-- hide badges as plugin is not on marketplace yet
 [![Version](https://img.shields.io/jetbrains/plugin/v/PLUGIN_ID.svg)](https://plugins.jetbrains.com/plugin/PLUGIN_ID)
 [![Downloads](https://img.shields.io/jetbrains/plugin/d/PLUGIN_ID.svg)](https://plugins.jetbrains.com/plugin/PLUGIN_ID)
