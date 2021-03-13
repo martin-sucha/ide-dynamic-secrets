@@ -75,13 +75,13 @@ class VaultClient(private val configuration: VaultState) : Closeable {
     private suspend fun <T> wrapClientException(message: String, block: suspend () -> T): T = try {
         block()
     } catch (e: IOException) {
-        throw VaultException("$message: ${e.message}")
+        throw VaultException("$message: ${e.message}", e)
     } catch (e: CertPathBuilderException) {
-        throw VaultException("Vault's TLS certificate check failed: ${e.message}")
+        throw VaultException("Vault's TLS certificate check failed: ${e.message}", e)
     } catch (e: GeneralSecurityException) {
-        throw VaultException("$message: ${e.message}")
+        throw VaultException("$message: ${e.message}", e)
     } catch (e: ResponseException) {
-        throw VaultException("$message: ${e.message}")
+        throw VaultException("$message: ${e.message}", e)
     }
 
     /**
@@ -258,6 +258,7 @@ class VaultConfigurable(private val project: Project) : BoundConfigurable("Dynam
             row {
                 label("Vault address:")
                 address = textField(vault.configuration::vaultAddress).withValidationOnInput {
+                    @Suppress("SwallowedException")
                     try {
                         val url = Url(it.text)
                         if (!(url.protocol == URLProtocol.HTTP || url.protocol == URLProtocol.HTTPS)) {
