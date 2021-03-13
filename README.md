@@ -21,6 +21,14 @@ IDE Dynamic Secrets plugin allows using secrets stored in Hashicorp Vault from w
 
 <!-- Plugin description end -->
 
+<details>
+<summary>Screenshots</summary>
+
+![Data source screenshot](screenshots/data-source.png)
+![Run configuration screenshot](screenshots/run-config.png)
+
+</details>
+
 ## Installation
 
 <!-- not available on marketplace yet
