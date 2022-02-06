@@ -6,11 +6,15 @@
 
 ### Added
 
+* Support for platform version `2021.3`
+
 ### Changed
 
 ### Deprecated
 
 ### Removed
+
+* Support for platform version `2021.1`
 
 ### Fixed
 

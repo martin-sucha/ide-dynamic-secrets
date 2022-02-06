@@ -15,7 +15,6 @@ import com.intellij.openapi.ui.DialogPanel
 import com.intellij.openapi.util.Disposer
 import com.intellij.ui.layout.panel
 import kotlinx.coroutines.runBlocking
-import java.sql.SQLException
 import java.util.WeakHashMap
 import java.util.concurrent.CompletableFuture
 import java.util.concurrent.CompletionStage
@@ -112,7 +111,7 @@ class DynamicSecretsAuthCredentialsProvider : DatabaseAuthProvider {
 
     override fun handleConnectionFailure(
         proto: DatabaseConnectionInterceptor.ProtoConnection,
-        e: SQLException,
+        e: Throwable,
         silent: Boolean,
         attempt: Int
     ): CompletionStage<DatabaseConnectionInterceptor.ProtoConnection>? {
